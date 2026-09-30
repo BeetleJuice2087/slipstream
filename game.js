@@ -630,14 +630,23 @@
       }, 2600);
     }
 
+    /* Hold preview: a gold line to the edge if the way is clear; if not, a
+       red line up to the arrow in the way, and that arrow is highlighted. */
     showPress(id, on) {
       const node = this.nodes.get(id);
       if (this.pressRay) { this.pressRay.remove(); this.pressRay = null; }
       if (this.pressNode) { this.pressNode.g.classList.remove('is-pressed'); this.pressNode = null; }
+      if (this.pressBlocker) { this.pressBlocker.g.classList.remove('is-in-the-way'); this.pressBlocker = null; }
       if (!node || !on) return;
       node.g.classList.add('is-pressed');
       this.pressNode = node;
-      if (Save.data.settings.preview) this.pressRay = this.exitRay(id, 'ray-preview');
+      if (!Save.data.settings.preview) return;
+      const blocker = this.board.firstBlocker(id);
+      this.pressRay = this.exitRay(id, blocker ? 'ray-preview-blocked' : 'ray-preview-clear');
+      if (blocker) {
+        const b = this.nodes.get(blocker.id);
+        if (b) { b.g.classList.add('is-in-the-way'); this.pressBlocker = b; }
+      }
     }
 
     setSelected(id) {
@@ -749,6 +758,11 @@
      INPUT — tap to release, drag to pan (when zoomed), pinch/wheel zoom,
      keyboard selection. Taps and pans are separated by a movement threshold.
      ====================================================================== */
+  /* A press shorter than HOLD_MS is a tap and releases the arrow. Holding
+     longer shows the arrow's exit path instead, and letting go after a hold
+     does nothing, so checking a path never costs a blocked tap or a heart. */
+  const HOLD_MS = 320;
+
   class Input {
     /** `handler` supplies release(id) and inputLocked(); defaults to the main game. */
     constructor(view, svg, handler) {
@@ -778,11 +792,16 @@
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
       if (this.pointers.size === 1) {
         this.tap = true;
+        this.held = false;
         this.pressId = this.view.hitTest(e.clientX, e.clientY);
         clearTimeout(this.pressTimer);
         if (this.pressId != null) {
           const id = this.pressId;
-          this.pressTimer = setTimeout(() => { if (this.tap) this.view.showPress(id, true); }, 170);
+          this.pressTimer = setTimeout(() => {
+            if (!this.tap) return;
+            this.held = true;              // now a hold: show the path, don't release on let-go
+            this.view.showPress(id, true);
+          }, HOLD_MS);
         }
       } else {
         this.cancelTap();
@@ -814,7 +833,7 @@
     }
     up(e, cancelled) {
       const had = this.pointers.has(e.pointerId);
-      const wasTap = this.tap && this.pointers.size === 1 && !cancelled;
+      const wasTap = this.tap && !this.held && this.pointers.size === 1 && !cancelled;
       this.pointers.delete(e.pointerId);
       if (this.pointers.size < 2) this.pinch = null;
       if (!had) return;
@@ -825,6 +844,7 @@
         if (id != null) this.h.release(id);
       }
       this.tap = false;
+      this.held = false;
     }
     key(e) {
       if (!this.view.p || this.h.inputLocked()) return;
@@ -1935,10 +1955,12 @@
         star: `<path d="${STAR_PATH}"/>`,
         pinch: '<path d="M7 7l-3-3M4 8V4h4M17 17l3 3M20 16v4h-4"/><circle cx="12" cy="12" r="2.2"/>',
         save: '<path d="M12 3v12M7 10l5 5 5-5M5 20h14"/>',
+        path: '<path d="M4 12h8" /><path d="M14 12h2M19 12h1" stroke-dasharray="0" /><path d="M9 8l4 4-4 4" />',
       };
       const tips = [
         ['heart', 'Campaign and Daily give you 3 hearts. Each blocked tap costs one, and losing all 3 restarts the board.'],
         ['hint', 'Stuck? Tap Hint and a safe arrow lights up.'],
+        ['path', 'Not sure where an arrow goes? Press and hold it to see its path. Letting go won’t move it.'],
         ['star', 'Earn up to 3 stars: clear the board, clear it without hints, then clear it without a single blocked tap.'],
         ['pinch', touchScreen() ? 'On big boards, use two fingers to zoom: spread them apart to zoom in, bring them together to zoom out. Drag with one finger to move around.' : 'On big boards, scroll to zoom in and out, and drag to move around.'],
         ['save', 'Your progress lives in this app. Removing the app deletes it, so make a backup in Settings first.'],

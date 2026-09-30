@@ -302,6 +302,7 @@ kbd {
 .tip-star { stroke: var(--gold); } .tip-star path { fill: var(--gold); }
 .tip-pinch { stroke: var(--a4); }
 .tip-save { stroke: var(--good); }
+.tip-path { stroke: var(--gold); }
 .howto-actions { display: flex; gap: 10px; }
 .howto-actions > * { flex: 1; }
 
@@ -762,6 +763,10 @@ kbd {
 .ray-blocked { stroke: var(--bad); }
 .ray-clear { stroke: var(--gold); }
 .ray-preview { stroke: var(--muted); opacity: 0.8; }
+.ray-preview-clear { stroke: var(--gold); stroke-width: 0.1; }
+.ray-preview-blocked { stroke: var(--bad); stroke-width: 0.1; }
+.arrow.is-in-the-way .body { stroke-width: calc(var(--aw) + 0.1); }
+.arrow.is-in-the-way { filter: drop-shadow(0 0 0.12px var(--bad)) drop-shadow(0 0 0.12px var(--bad)); }
 .hit-x { stroke: var(--bad); stroke-width: 0.09; stroke-linecap: round; }
 .order-label { font-family: var(--font-body); font-weight: 800; font-size: 0.34px; fill: var(--text); paint-order: stroke; stroke: var(--board); stroke-width: 0.1px; text-anchor: middle; dominant-baseline: central; }
 
