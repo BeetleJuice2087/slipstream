@@ -149,24 +149,40 @@
       if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
       return this.ctx;
     },
-    /* Recorded sounds (sounds.js) are decoded once, on the first tap. */
+    /* Recorded sounds (sounds.js) are decoded as soon as the app opens, so
+       they are ready before the first tap. Browsers allow creating the audio
+       context early; it simply stays paused until the player's first touch. */
     samples: {},
+    sampleState: {},   // name -> 'loading' | 'ready' | 'failed'
+    preload() {
+      if (this.ctx) return;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      try { this.ctx = new AC(); } catch (e) { return; }
+      this.loadSamples();
+    },
     loadSamples() {
       const src = window.SLIP_SOUNDS || {};
       for (const name in src) {
+        if (this.sampleState[name]) continue;
+        this.sampleState[name] = 'loading';
         try {
           const bin = atob(src[name]);
           const bytes = new Uint8Array(bin.length);
           for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          const done = (buf) => { this.samples[name] = buf; };
-          const p = this.ctx.decodeAudioData(bytes.buffer, done, () => {});
-          if (p && p.catch) p.then(done).catch(() => {});
-        } catch (e) { /* fall back to the synth sound */ }
+          const ok = (buf) => { if (buf) { this.samples[name] = buf; this.sampleState[name] = 'ready'; } };
+          const fail = () => { if (this.sampleState[name] !== 'ready') this.sampleState[name] = 'failed'; };
+          const p = this.ctx.decodeAudioData(bytes.buffer, ok, fail);
+          if (p && p.then) p.then(ok, fail);
+        } catch (e) { this.sampleState[name] = 'failed'; }
       }
     },
+    /** Plays a recorded sound. Returns false only if it can never play
+        (so the caller can use the synth instead). While still loading it
+        plays nothing rather than mixing in the old sound. */
     sample(name, vol, rate) {
       const buf = this.samples[name];
-      if (!buf) return false;
+      if (!buf) return this.sampleState[name] !== 'failed' && !!window.SLIP_SOUNDS && name in window.SLIP_SOUNDS;
       const c = this.ctx;
       const src = c.createBufferSource();
       src.buffer = buf;
@@ -329,6 +345,17 @@
      RENDERER — SVG board. One <g> per arrow (casing, trail, body, head).
      Board units: one cell = 1 unit, cell (x, y) centre at (x+.5, y+.5).
      ====================================================================== */
+  /* Escape flight, tuned to the arrow sound: the "fwip" peaks ~40 ms after
+     the tap and fades by ~150 ms, so arrows launch hard and are nearly gone
+     in about a third of a second.
+       duration = BASE_MS + PER_CELL_MS × distance, kept between MIN and MAX
+       EASE: higher = snappier launch that settles as it leaves (1 = constant speed) */
+  const ESCAPE_BASE_MS = 170;
+  const ESCAPE_PER_CELL_MS = 9;
+  const ESCAPE_MIN_MS = 220;
+  const ESCAPE_MAX_MS = 420;
+  const ESCAPE_EASE = 2.4;
+
   const TIP = 0.36;      // how far the arrowhead tip reaches past the head cell centre
   const HEAD_BACK = 0.1; // where the arrowhead base sits behind the head cell centre
   const HEAD_HALF = 0.29;
@@ -489,20 +516,20 @@
       const geo = node.geo;
       const edge = this.distToEdge(node.a);
       const total = geo.len + edge + 1.6;
-      const dur = clamp(190 + total * 24, 260, 720);
+      const dur = clamp(ESCAPE_BASE_MS + total * ESCAPE_PER_CELL_MS, ESCAPE_MIN_MS, ESCAPE_MAX_MS);
       const start = performance.now();
       let burst = false;
       node.trail.style.display = '';
       node.g.style.pointerEvents = 'none';
       this.addAnim((now) => {
         const t = Math.min(1, (now - start) / dur);
-        const e = t * (0.4 + 0.6 * t); // quick start, accelerating exit
+        const e = 1 - Math.pow(1 - t, ESCAPE_EASE); // fast launch in step with the sound
         const off = total * e;
         this.shape(node, off);
         const trailFrom = Math.max(0, off - 2);
         node.trail.setAttribute('d', BoardView.pathD(this.windowPts(geo, trailFrom, off)));
         node.trail.style.opacity = String(0.35 * (1 - t));
-        if (t > 0.78) node.g.style.opacity = String(Math.max(0, (1 - t) / 0.22));
+        if (t > 0.7) node.g.style.opacity = String(Math.max(0, (1 - t) / 0.3));
         if (!burst && off >= edge) {
           burst = true;
           const hd = geo.pts[geo.pts.length - 1];
@@ -2259,6 +2286,7 @@
     Save.load();
     if (/debug/.test(location.hash)) Save.data.settings.dev = true;
     migrateStars();
+    if (Save.data.settings.sound) Sound.preload();
     HeroStream.init();
     Game.view = new BoardView($('#board'));
     new Input(Game.view, $('#board'));
