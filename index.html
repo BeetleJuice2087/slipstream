@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Installable app (home screen) -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<meta name="theme-color" content="#121329">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Slipstream">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!--PAGE-START-->
+<title>Slipstream</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=Unbounded:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="styles.css">
+<!--HEAD-END-->
+</head>
+<body>
+<div id="app">
+
+  <!-- ============================ HOME ============================ -->
+  <section class="screen screen-menu" id="screen-home" data-screen="home" hidden>
+    <div class="menu-col">
+      <header class="hero">
+        <svg class="hero-stream" id="hero-stream" aria-hidden="true" focusable="false"></svg>
+        <h1 class="logo">Slip<span>stream</span></h1>
+        <p class="tagline">Tap an arrow and it flies. Find the order that clears the board.</p>
+      </header>
+
+      <button class="continue-card" id="home-continue" type="button" hidden>
+        <span class="continue-label">Continue</span>
+        <span class="continue-title" id="home-continue-title">Level 4</span>
+        <span class="continue-sub" id="home-continue-sub">12 arrows left</span>
+        <svg class="continue-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M12 6l6 6-6 6" /></svg>
+      </button>
+
+      <nav class="mode-list" aria-label="Game modes">
+        <button class="mode-card mode-campaign" type="button" data-go="campaign">
+          <svg class="mode-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M8 38 V26 H22 V14 H34" /><path class="fill" d="M40 14 l-8 -5 v10 z" /></svg>
+          <span class="mode-text">
+            <span class="mode-name">Campaign</span>
+            <span class="mode-sub" id="home-campaign-sub">150 levels · Easy to Impossible</span>
+          </span>
+          <span class="mode-meter" aria-hidden="true"><span id="home-campaign-bar"></span></span>
+        </button>
+        <button class="mode-card mode-daily" type="button" data-go="daily">
+          <svg class="mode-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="11" width="32" height="29" rx="4" /><path d="M8 20 H40 M16 7 V14 M32 7 V14" /><path d="M17 30 H27" /><path class="fill" d="M32 30 l-6 -4 v8 z" /></svg>
+          <span class="mode-text">
+            <span class="mode-name">Daily Puzzle</span>
+            <span class="mode-sub" id="home-daily-sub">A new board every day</span>
+          </span>
+          <span class="mode-badge" id="home-daily-badge" hidden></span>
+        </button>
+        <button class="mode-card mode-zen" type="button" data-go="zen">
+          <svg class="mode-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M5 20 C9 11 15 11 19 17 C23 23 27 17 31 17" /><path class="fill" d="M30 11.5 L40 17 L30 22.5 Z" /><path d="M5 36 C9 27 15 27 19 32 C23 38 27 33 31 33" /><path class="fill" d="M30 27.5 L40 33 L30 38.5 Z" /></svg>
+          <span class="mode-text">
+            <span class="mode-name">Zen</span>
+            <span class="mode-sub" id="home-zen-sub">Endless boards, no final level</span>
+          </span>
+        </button>
+      </nav>
+
+      <div class="home-row">
+        <button class="pill-btn" type="button" data-go="stats">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V11M12 19V5M19 19v-6" /></svg>Statistics
+        </button>
+        <button class="pill-btn" type="button" data-go="settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>Settings
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ CAMPAIGN ============================ -->
+  <section class="screen screen-menu" id="screen-campaign" data-screen="campaign" hidden>
+    <div class="menu-col wide">
+      <header class="screen-head">
+        <button class="icon-btn" type="button" data-back aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+        <h2>Campaign</h2>
+        <span class="head-meta" id="campaign-count">0 / 150</span>
+      </header>
+      <div id="campaign-tiers"></div>
+    </div>
+  </section>
+
+  <!-- ============================ DAILY ============================ -->
+  <section class="screen screen-menu" id="screen-daily" data-screen="daily" hidden>
+    <div class="menu-col">
+      <header class="screen-head">
+        <button class="icon-btn" type="button" data-back aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+        <h2>Daily Puzzle</h2>
+      </header>
+
+      <div class="daily-today">
+        <div class="daily-date">
+          <span class="daily-weekday" id="daily-weekday">Tuesday</span>
+          <span class="daily-day" id="daily-day">29</span>
+          <span class="daily-month" id="daily-month">September 2026</span>
+        </div>
+        <div class="daily-info">
+          <span class="diff-chip" id="daily-diff">Medium</span>
+          <p class="daily-status" id="daily-status">Not started</p>
+          <button class="primary-btn" id="daily-play" type="button">Play today's puzzle</button>
+        </div>
+      </div>
+
+      <div class="streak-row">
+        <div class="streak-cell"><span class="streak-num" id="daily-streak">0</span><span class="streak-label">Current streak</span></div>
+        <div class="streak-cell"><span class="streak-num" id="daily-best">0</span><span class="streak-label">Longest streak</span></div>
+        <div class="streak-cell"><span class="streak-num" id="daily-done">0</span><span class="streak-label">Completed</span></div>
+        <div class="streak-cell"><span class="streak-num" id="daily-perfect">0</span><span class="streak-label">Perfect</span></div>
+      </div>
+
+      <div class="calendar">
+        <div class="cal-head">
+          <button class="icon-btn small" type="button" id="cal-prev" aria-label="Previous month"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" /></svg></button>
+          <span class="cal-title" id="cal-title">September 2026</span>
+          <button class="icon-btn small" type="button" id="cal-next" aria-label="Next month"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></button>
+        </div>
+        <div class="cal-grid" id="cal-grid" role="grid" aria-label="Daily puzzle history"></div>
+        <div class="cal-legend">
+          <span><i class="mark mark-done">✓</i>Completed</span>
+          <span><i class="mark mark-perfect">★</i>Perfect</span>
+          <span><i class="mark mark-missed">•</i>Missed</span>
+        </div>
+        <p class="cal-note">Difficulty climbs through the week: Monday is Easy, Tuesday to Thursday Medium, Friday to Sunday Hard.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ ZEN ============================ -->
+  <section class="screen screen-menu" id="screen-zen" data-screen="zen" hidden>
+    <div class="menu-col">
+      <header class="screen-head">
+        <button class="icon-btn" type="button" data-back aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+        <h2>Zen</h2>
+      </header>
+      <p class="screen-lede">Boards keep coming. No timer pressure, no final level. Pick a difficulty and play as long as you like.</p>
+      <button class="continue-card slim" id="zen-continue" type="button" hidden>
+        <span class="continue-label">Continue board</span>
+        <span class="continue-title" id="zen-continue-title">Medium</span>
+        <svg class="continue-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M12 6l6 6-6 6" /></svg>
+      </button>
+      <div class="zen-choices" id="zen-choices" role="list"></div>
+    </div>
+  </section>
+
+  <!-- ============================ STATS ============================ -->
+  <section class="screen screen-menu" id="screen-stats" data-screen="stats" hidden>
+    <div class="menu-col wide">
+      <header class="screen-head">
+        <button class="icon-btn" type="button" data-back aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+        <h2>Statistics</h2>
+      </header>
+      <div id="stats-body"></div>
+    </div>
+  </section>
+
+  <!-- ============================ SETTINGS ============================ -->
+  <section class="screen screen-menu" id="screen-settings" data-screen="settings" hidden>
+    <div class="menu-col">
+      <header class="screen-head">
+        <button class="icon-btn" type="button" data-back aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+        <h2>Settings</h2>
+      </header>
+      <div class="settings-list">
+        <label class="setting">
+          <span class="setting-text"><span class="setting-name">Sound</span><span class="setting-sub">Soft synthesized effects</span></span>
+          <input type="checkbox" class="switch" id="set-sound">
+        </label>
+        <label class="setting">
+          <span class="setting-text"><span class="setting-name">Reduced motion</span><span class="setting-sub">Arrows fade out instead of flying. Follows your device when set to Auto.</span></span>
+          <select id="set-motion" class="select">
+            <option value="auto">Auto</option>
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+        <label class="setting">
+          <span class="setting-text"><span class="setting-name">High contrast</span><span class="setting-sub">Thicker outlined arrows and stronger text</span></span>
+          <input type="checkbox" class="switch" id="set-contrast">
+        </label>
+        <label class="setting">
+          <span class="setting-text"><span class="setting-name">Show exit on press</span><span class="setting-sub">While holding an arrow, preview the path it will take</span></span>
+          <input type="checkbox" class="switch" id="set-preview">
+        </label>
+        <label class="setting" id="set-dev-row" hidden>
+          <span class="setting-text"><span class="setting-name">Developer tools</span><span class="setting-sub">Seed, generator data and solver buttons in game</span></span>
+          <input type="checkbox" class="switch" id="set-dev">
+        </label>
+      </div>
+
+      <div class="danger-zone">
+        <h3>Reset</h3>
+        <p>Erase campaign progress, statistics, daily history and Zen records on this device.</p>
+        <button class="danger-btn" type="button" id="reset-open">Reset all progress</button>
+      </div>
+
+      <p class="about">
+        Keyboard: <kbd>H</kbd> hint · <kbd>←</kbd><kbd>→</kbd> pick an arrow · <kbd>Enter</kbd> release · <kbd>+</kbd>/<kbd>−</kbd> zoom · <kbd>0</kbd> fit · <kbd>Esc</kbd> back<br>
+        Progress is saved in this browser only. <button class="version" type="button" id="version-tap">Slipstream 1.0 · generator v3</button>
+      </p>
+    </div>
+  </section>
+
+  <!-- ============================ GAME ============================ -->
+  <section class="screen screen-game" id="screen-game" data-screen="game" hidden>
+    <header class="game-top">
+      <button class="icon-btn" type="button" id="game-back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+      <div class="game-title">
+        <span class="game-mode" id="game-mode">Campaign</span>
+        <span class="game-name" id="game-name">Level 1</span>
+      </div>
+      <span class="diff-chip" id="game-diff">Easy</span>
+    </header>
+    <div class="hud" aria-label="Puzzle status">
+      <div class="hud-item"><span class="hud-num" id="hud-left">0</span><span class="hud-label">arrows left</span></div>
+      <div class="hud-item"><span class="hud-num" id="hud-time">0:00</span><span class="hud-label">time</span></div>
+      <div class="hud-item" id="hud-blocked-item"><span class="hud-num" id="hud-blocked">0</span><span class="hud-label">blocked</span></div>
+      <div class="hud-item" id="hud-hearts-item" hidden><span class="hearts" id="game-hearts" role="img" aria-label="3 of 3 hearts left"></span><span class="hud-label">hearts</span></div>
+      <div class="hud-item"><span class="hud-num" id="hud-hints">0</span><span class="hud-label">hints</span></div>
+      <div class="hud-progress" aria-hidden="true"><span id="hud-bar"></span></div>
+      <span class="perfect-flag" id="hud-perfect" title="Still on track for a perfect clear">★ Perfect run</span>
+    </div>
+
+    <div class="board-wrap" id="board-wrap">
+      <svg id="board" class="board" role="application" tabindex="0" aria-label="Puzzle board. Use the arrow keys to pick an arrow and Enter to release it." aria-describedby="board-help">
+        <g class="layer-grid"></g>
+        <g class="layer-fx-under"></g>
+        <g class="layer-arrows"></g>
+        <g class="layer-fx"></g>
+        <g class="layer-labels"></g>
+      </svg>
+      <p id="board-help" class="sr-only">Each arrow slides forward in the direction of its head. It escapes if nothing is in its way.</p>
+      <div class="board-loading" id="board-loading" hidden><span class="spinner" aria-hidden="true"></span>Building board…</div>
+      <div class="zoom-ctrl" role="group" aria-label="Zoom">
+        <button class="icon-btn small" type="button" id="zoom-in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12" /></svg></button>
+        <button class="icon-btn small" type="button" id="zoom-out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M6 12h12" /></svg></button>
+        <button class="icon-btn small" type="button" id="zoom-fit" aria-label="Fit board to screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg></button>
+      </div>
+    </div>
+
+    <footer class="game-dock">
+      <button class="dock-btn" type="button" id="btn-restart">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7" /><path d="M4 4v5h5" /></svg><span>Restart</span>
+      </button>
+      <button class="dock-btn dock-hint" type="button" id="btn-hint">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z" /></svg><span>Hint</span>
+      </button>
+      <button class="dock-btn" type="button" id="btn-debug" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M14 5l-4 14" /></svg><span>Dev</span>
+      </button>
+    </footer>
+
+    <aside class="debug-panel" id="debug-panel" hidden aria-label="Developer tools">
+      <div class="debug-head"><strong>Generator</strong><button class="icon-btn small" type="button" id="debug-close" aria-label="Close developer tools"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button></div>
+      <dl class="debug-grid" id="debug-info"></dl>
+      <div class="debug-actions">
+        <button type="button" data-debug="newseed">Generate new seed</button>
+        <button type="button" data-debug="validate">Validate puzzle</button>
+        <button type="button" data-debug="order">Show solution order</button>
+        <button type="button" data-debug="solve">Auto-solve</button>
+      </div>
+      <p class="debug-out" id="debug-out" aria-live="polite"></p>
+    </aside>
+  </section>
+
+  <!-- ============================ OVERLAYS ============================ -->
+  <div class="overlay" id="complete-overlay" hidden>
+    <div class="sheet complete-sheet" role="dialog" aria-modal="true" aria-labelledby="complete-title">
+      <div class="burst" aria-hidden="true"></div>
+      <p class="complete-kicker" id="complete-kicker">Board cleared</p>
+      <h2 class="complete-title" id="complete-title">Cleared</h2>
+      <p class="complete-note" id="complete-note"></p>
+      <div class="complete-stats" id="complete-stats"></div>
+      <div class="sheet-actions" id="complete-actions"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="confirm-overlay" hidden>
+    <div class="sheet confirm-sheet" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-body">
+      <h2 id="confirm-title">Are you sure?</h2>
+      <div id="confirm-body"></div>
+      <div class="sheet-actions">
+        <button type="button" class="ghost-btn" id="confirm-cancel">Cancel</button>
+        <button type="button" class="primary-btn" id="confirm-ok">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="sr-only" id="live" aria-live="polite"></div>
+</div>
+<script src="engine.js"></script>
+<script src="game.js"></script>
+<!--PAGE-END-->
+<script src="pwa.js"></script>
+</body>
+</html>
