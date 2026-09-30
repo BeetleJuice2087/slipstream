@@ -144,9 +144,38 @@
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return null;
         try { this.ctx = new AC(); } catch (e) { return null; }
+        this.loadSamples();
       }
       if (this.ctx.state === 'suspended') this.ctx.resume().catch(() => {});
       return this.ctx;
+    },
+    /* Recorded sounds (sounds.js) are decoded once, on the first tap. */
+    samples: {},
+    loadSamples() {
+      const src = window.SLIP_SOUNDS || {};
+      for (const name in src) {
+        try {
+          const bin = atob(src[name]);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const done = (buf) => { this.samples[name] = buf; };
+          const p = this.ctx.decodeAudioData(bytes.buffer, done, () => {});
+          if (p && p.catch) p.then(done).catch(() => {});
+        } catch (e) { /* fall back to the synth sound */ }
+      }
+    },
+    sample(name, vol, rate) {
+      const buf = this.samples[name];
+      if (!buf) return false;
+      const c = this.ctx;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.playbackRate.value = rate || 1;
+      const g = c.createGain();
+      g.gain.value = vol;
+      src.connect(g).connect(c.destination);
+      src.start();
+      return true;
     },
     tone(freq, dur, o) {
       o = o || {};
@@ -185,10 +214,16 @@
         switch (name) {
           case 'tap': this.tone(620, 0.05, { vol: 0.035 }); break;
           case 'escape': {
+            // Chris's "fwip". It lifts slightly in pitch during a streak of
+            // clean releases, with a little random variation so fast
+            // clearing doesn't sound like a machine gun.
             const step = Math.min(arg || 0, 12);
-            const scale = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28];
-            this.whoosh(0.07, 0.2);
-            this.tone(392 * Math.pow(2, scale[step] / 12), 0.12, { type: 'triangle', vol: 0.07 });
+            const rate = (1 + step * 0.012) * (0.96 + Math.random() * 0.08);
+            if (!this.sample('arrow', 0.55, rate)) {
+              const scale = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24, 26, 28];
+              this.whoosh(0.07, 0.2);
+              this.tone(392 * Math.pow(2, scale[step] / 12), 0.12, { type: 'triangle', vol: 0.07 });
+            }
             break;
           }
           case 'blocked':
@@ -887,7 +922,7 @@
         if (usesHearts(sess.mode) && !Save.data.seenHeartsTip) {
           Save.data.seenHeartsTip = true;
           toast('You have 3 hearts. Each blocked tap costs one.');
-        } else maybeZoomTip(this.view);
+        }
       }, 16));
     },
 
@@ -1769,16 +1804,6 @@
     liveTimer = setTimeout(() => { l.textContent = msg; }, 30);
   }
   const touchScreen = () => !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-  const ZOOM_TIP_TOUCH = 'Use two fingers to zoom: spread them apart to zoom in, bring them together to zoom out. Drag with one finger to move around.';
-  const ZOOM_TIP_MOUSE = 'Scroll to zoom in and out. Drag to move around.';
-  /** Shown the first two times a board is small enough to need zooming. */
-  function maybeZoomTip(view) {
-    if ((Save.data.zoomTips || 0) >= 2) return;
-    if (view.cellPx() && view.cellPx() < 30) {
-      Save.data.zoomTips = (Save.data.zoomTips || 0) + 1;
-      toast(touchScreen() ? ZOOM_TIP_TOUCH : ZOOM_TIP_MOUSE, 6500);
-    }
-  }
 
   /* ======================================================================
      HOW TO PLAY — four short steps with small hand-made practice boards.
@@ -2251,5 +2276,5 @@
   boot();
 
   // Exposed for console testing only.
-  window.Slipstream = { Game, Save, E };
+  window.Slipstream = { Game, Save, E, Sound };
 })();

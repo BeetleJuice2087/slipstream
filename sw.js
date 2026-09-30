@@ -2,9 +2,9 @@
    Strategy: network first for the game's own files (so updates you upload
    show up right away when online), falling back to the saved copy offline.
    Fonts are served from the saved copy and refreshed in the background. */
-const CACHE = 'slipstream-v3';
+const CACHE = 'slipstream-v5';
 const APP_FILES = [
-  './', 'index.html', 'styles.css', 'engine.js', 'game.js', 'pwa.js', 'manifest.webmanifest',
+  './', 'index.html', 'styles.css', 'sounds.js', 'engine.js', 'game.js', 'pwa.js', 'manifest.webmanifest',
   'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png',
 ];
 
