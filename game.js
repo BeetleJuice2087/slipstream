@@ -62,7 +62,7 @@
   function defaultSave() {
     return {
       v: 1,
-      settings: { sound: true, motion: 'auto', highContrast: false, preview: true, dev: false },
+      settings: { sound: true, motion: 'auto', speed: 'normal', highContrast: false, preview: true, dev: false },
       campaign: { unlocked: 1, levels: {} },
       daily: { history: {}, longestStreak: 0 },
       zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [] },
@@ -345,16 +345,19 @@
      RENDERER — SVG board. One <g> per arrow (casing, trail, body, head).
      Board units: one cell = 1 unit, cell (x, y) centre at (x+.5, y+.5).
      ====================================================================== */
-  /* Escape flight, tuned to the arrow sound: the "fwip" peaks ~40 ms after
-     the tap and fades by ~150 ms, so arrows launch hard and are nearly gone
-     in about a third of a second.
-       duration = BASE_MS + PER_CELL_MS × distance, kept between MIN and MAX
-       EASE: higher = snappier launch that settles as it leaves (1 = constant speed) */
-  const ESCAPE_BASE_MS = 170;
-  const ESCAPE_PER_CELL_MS = 9;
-  const ESCAPE_MIN_MS = 220;
-  const ESCAPE_MAX_MS = 420;
-  const ESCAPE_EASE = 2.4;
+  /* Escape flight speeds (Settings → Arrow speed). Every speed launches
+     on the tap, in step with the arrow sound, then glides off the board.
+       duration = baseMs + perCellMs × distance, kept between minMs and maxMs
+       ease: higher = punchier launch that settles as it leaves (1 = steady)
+     The arrow stays fully visible until its tail has left the board; it
+     only fades once it is past the edge. */
+  const ESCAPE_SPEEDS = {
+    fast:    { baseMs: 170, perCellMs: 9,  minMs: 220, maxMs: 420, ease: 2.4 },
+    normal:  { baseMs: 280, perCellMs: 12, minMs: 380, maxMs: 650, ease: 1.7 },
+    relaxed: { baseMs: 420, perCellMs: 16, minMs: 560, maxMs: 950, ease: 1.35 },
+  };
+  const escapeSpeed = () => ESCAPE_SPEEDS[Save.data.settings.speed] || ESCAPE_SPEEDS.normal;
+  const EXIT_GLIDE_CELLS = 2.6;   // how far past the edge an arrow travels before it's gone
 
   const TIP = 0.36;      // how far the arrowhead tip reaches past the head cell centre
   const HEAD_BACK = 0.1; // where the arrowhead base sits behind the head cell centre
@@ -515,21 +518,24 @@
       }
       const geo = node.geo;
       const edge = this.distToEdge(node.a);
-      const total = geo.len + edge + 1.6;
-      const dur = clamp(ESCAPE_BASE_MS + total * ESCAPE_PER_CELL_MS, ESCAPE_MIN_MS, ESCAPE_MAX_MS);
+      const total = geo.len + edge + EXIT_GLIDE_CELLS;
+      const sp = escapeSpeed();
+      const dur = clamp(sp.baseMs + total * sp.perCellMs, sp.minMs, sp.maxMs);
+      const fadeFrom = geo.len + edge;   // tail reaches the board edge here
       const start = performance.now();
       let burst = false;
       node.trail.style.display = '';
       node.g.style.pointerEvents = 'none';
       this.addAnim((now) => {
         const t = Math.min(1, (now - start) / dur);
-        const e = 1 - Math.pow(1 - t, ESCAPE_EASE); // fast launch in step with the sound
+        const e = 1 - Math.pow(1 - t, sp.ease); // launches on the tap, in step with the sound
         const off = total * e;
         this.shape(node, off);
         const trailFrom = Math.max(0, off - 2);
         node.trail.setAttribute('d', BoardView.pathD(this.windowPts(geo, trailFrom, off)));
         node.trail.style.opacity = String(0.35 * (1 - t));
-        if (t > 0.7) node.g.style.opacity = String(Math.max(0, (1 - t) / 0.3));
+        // Fully visible while any part is on the board; fade only past the edge.
+        node.g.style.opacity = off <= fadeFrom ? '1' : String(Math.max(0, 1 - (off - fadeFrom) / EXIT_GLIDE_CELLS));
         if (!burst && off >= edge) {
           burst = true;
           const hd = geo.pts[geo.pts.length - 1];
@@ -1606,6 +1612,7 @@
     const st = Save.data.settings;
     $('#set-sound').checked = !!st.sound;
     $('#set-motion').value = st.motion;
+    $('#set-speed').value = ESCAPE_SPEEDS[st.speed] ? st.speed : 'normal';
     $('#set-contrast').checked = !!st.highContrast;
     $('#set-preview').checked = !!st.preview;
     $('#set-dev').checked = !!st.dev;
@@ -1613,6 +1620,7 @@
   };
   $('#set-sound').addEventListener('change', (e) => { Save.data.settings.sound = e.target.checked; Save.soon(); if (e.target.checked) Sound.play('hint'); });
   $('#set-motion').addEventListener('change', (e) => { Save.data.settings.motion = e.target.value; applySettings(); Save.soon(); });
+  $('#set-speed').addEventListener('change', (e) => { Save.data.settings.speed = e.target.value; Save.soon(); });
   $('#set-contrast').addEventListener('change', (e) => { Save.data.settings.highContrast = e.target.checked; applySettings(); Save.soon(); });
   $('#set-preview').addEventListener('change', (e) => { Save.data.settings.preview = e.target.checked; Save.soon(); });
   $('#set-dev').addEventListener('change', (e) => { Save.data.settings.dev = e.target.checked; applySettings(); Save.soon(); });
