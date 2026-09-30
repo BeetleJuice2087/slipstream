@@ -65,7 +65,15 @@
         </button>
       </nav>
 
+      <button class="nudge" id="home-backup-nudge" type="button" data-go="settings" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 20h14" /></svg>
+        <span>Back up your progress so you never lose it</span>
+      </button>
+
       <div class="home-row">
+        <button class="pill-btn wide" type="button" data-go="howto">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M9.6 9.3a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.9v.3M12 17.2v.1" /></svg>How to play
+        </button>
         <button class="pill-btn" type="button" data-go="stats">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V11M12 19V5M19 19v-6" /></svg>Statistics
         </button>
@@ -150,6 +158,32 @@
     </div>
   </section>
 
+  <!-- ============================ HOW TO PLAY ============================ -->
+  <section class="screen screen-menu" id="screen-howto" data-screen="howto" hidden>
+    <div class="menu-col">
+      <header class="screen-head">
+        <button class="icon-btn" type="button" data-back aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+        <h2>How to play</h2>
+        <span class="howto-dots" id="howto-dots" aria-hidden="true"></span>
+      </header>
+      <div class="howto-card">
+        <p class="howto-step" id="howto-step">Step 1 of 4</p>
+        <h3 class="howto-title" id="howto-title">Tap an arrow</h3>
+        <p class="howto-text" id="howto-text" aria-live="polite"></p>
+        <div class="howto-board-wrap" id="howto-board-wrap">
+          <svg id="howto-board" class="board" role="application" tabindex="0" aria-label="Practice board">
+            <g class="layer-grid"></g><g class="layer-fx-under"></g><g class="layer-arrows"></g><g class="layer-fx"></g><g class="layer-labels"></g>
+          </svg>
+        </div>
+        <ul class="howto-tips" id="howto-tips" hidden></ul>
+      </div>
+      <div class="howto-actions">
+        <button class="ghost-btn" type="button" id="howto-skip">Skip</button>
+        <button class="primary-btn" type="button" id="howto-next" disabled>Next</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ============================ STATS ============================ -->
   <section class="screen screen-menu" id="screen-stats" data-screen="stats" hidden>
     <div class="menu-col wide">
@@ -195,6 +229,27 @@
         </label>
       </div>
 
+      <div class="backup-block">
+        <h3>Back up your progress</h3>
+        <p>Progress is saved on this device only. Keep a backup code somewhere safe, like Notes or a message to yourself, to restore it later or move it to a new phone.</p>
+        <p class="backup-warn" role="note">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5 2.5 20h19L12 3.5z"/><path d="M12 10v4.5M12 17.3v.1"/></svg>
+          <span><strong>Removing the app deletes your progress.</strong> Make a backup before you remove it from your home screen.</span>
+        </p>
+        <p class="backup-last" id="backup-last">No backup yet</p>
+        <div class="btn-row">
+          <button class="primary-btn" type="button" id="backup-copy">Copy backup code</button>
+          <button class="ghost-btn" type="button" id="backup-file">Save as file</button>
+        </div>
+        <textarea class="code-box" id="backup-code" readonly hidden aria-label="Your backup code"></textarea>
+        <h4>Restore from a backup</h4>
+        <textarea class="code-box" id="restore-code" placeholder="Paste a backup code here" aria-label="Backup code to restore"></textarea>
+        <div class="btn-row">
+          <button class="primary-btn" type="button" id="restore-go">Restore</button>
+          <label class="ghost-btn file-btn">Open backup file<input type="file" id="restore-file" accept=".txt,text/plain"></label>
+        </div>
+      </div>
+
       <div class="danger-zone">
         <h3>Reset</h3>
         <p>Erase campaign progress, statistics, daily history and Zen records on this device.</p>
@@ -202,8 +257,8 @@
       </div>
 
       <p class="about">
-        Keyboard: <kbd>H</kbd> hint · <kbd>←</kbd><kbd>→</kbd> pick an arrow · <kbd>Enter</kbd> release · <kbd>+</kbd>/<kbd>−</kbd> zoom · <kbd>0</kbd> fit · <kbd>Esc</kbd> back<br>
-        Progress is saved in this browser only. <button class="version" type="button" id="version-tap">Slipstream 1.0 · generator v3</button>
+        Keyboard: <kbd>H</kbd> hint · <kbd>←</kbd><kbd>→</kbd> pick an arrow · <kbd>Enter</kbd> release · <kbd>+</kbd>/<kbd>−</kbd> or scroll to zoom · <kbd>0</kbd> fit · <kbd>Esc</kbd> back<br>
+        Progress is saved on this device. Use backup to keep a copy. <button class="version" type="button" id="version-tap">Slipstream 1.0 · generator v3</button>
       </p>
     </div>
   </section>
@@ -238,11 +293,6 @@
       </svg>
       <p id="board-help" class="sr-only">Each arrow slides forward in the direction of its head. It escapes if nothing is in its way.</p>
       <div class="board-loading" id="board-loading" hidden><span class="spinner" aria-hidden="true"></span>Building board…</div>
-      <div class="zoom-ctrl" role="group" aria-label="Zoom">
-        <button class="icon-btn small" type="button" id="zoom-in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12" /></svg></button>
-        <button class="icon-btn small" type="button" id="zoom-out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M6 12h12" /></svg></button>
-        <button class="icon-btn small" type="button" id="zoom-fit" aria-label="Fit board to screen"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></svg></button>
-      </div>
     </div>
 
     <footer class="game-dock">
@@ -275,6 +325,7 @@
     <div class="sheet complete-sheet" role="dialog" aria-modal="true" aria-labelledby="complete-title">
       <div class="burst" aria-hidden="true"></div>
       <p class="complete-kicker" id="complete-kicker">Board cleared</p>
+      <div class="star-row" id="complete-stars" role="img" aria-label=""></div>
       <h2 class="complete-title" id="complete-title">Cleared</h2>
       <p class="complete-note" id="complete-note"></p>
       <div class="complete-stats" id="complete-stats"></div>

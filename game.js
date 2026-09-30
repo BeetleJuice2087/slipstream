@@ -74,7 +74,9 @@
       },
       active: null,   // the in-progress board (see newSession)
       route: 'home',
-      seenZoomTip: false,
+      zoomTips: 0,          // times the pinch-to-zoom tip has been shown
+      seenHowTo: false,
+      lastBackup: null,
       seenHeartsTip: false,
     };
   }
@@ -686,9 +688,11 @@
      keyboard selection. Taps and pans are separated by a movement threshold.
      ====================================================================== */
   class Input {
-    constructor(view, svg) {
+    /** `handler` supplies release(id) and inputLocked(); defaults to the main game. */
+    constructor(view, svg, handler) {
       this.view = view;
       this.svg = svg;
+      this.h = handler || Game;
       this.pointers = new Map();
       this.tap = false;
       this.pressId = null;
@@ -707,7 +711,7 @@
       svg.addEventListener('contextmenu', (e) => e.preventDefault());
     }
     down(e) {
-      if (!this.view.p || Game.inputLocked()) return;
+      if (!this.view.p || this.h.inputLocked()) return;
       try { this.svg.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY });
       if (this.pointers.size === 1) {
@@ -756,12 +760,12 @@
       this.view.showPress(null, false);
       if (wasTap) {
         const id = this.view.hitTest(e.clientX, e.clientY);
-        if (id != null) Game.release(id);
+        if (id != null) this.h.release(id);
       }
       this.tap = false;
     }
     key(e) {
-      if (!this.view.p || Game.inputLocked()) return;
+      if (!this.view.p || this.h.inputLocked()) return;
       const ids = Array.from(this.view.nodes.keys());
       if (!ids.length) return;
       ids.sort((a, b) => {
@@ -770,13 +774,13 @@
         return ha[1] - hb[1] || ha[0] - hb[0];
       });
       let i = ids.indexOf(this.view.selected);
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { i = (i + 1) % ids.length; this.view.setSelected(ids[i]); e.preventDefault(); announceArrow(ids[i]); }
-      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { i = i <= 0 ? ids.length - 1 : i - 1; this.view.setSelected(ids[i]); e.preventDefault(); announceArrow(ids[i]); }
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { i = (i + 1) % ids.length; this.view.setSelected(ids[i]); e.preventDefault(); announceArrow(this.view.p, ids[i]); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { i = i <= 0 ? ids.length - 1 : i - 1; this.view.setSelected(ids[i]); e.preventDefault(); announceArrow(this.view.p, ids[i]); }
       else if ((e.key === 'Enter' || e.key === ' ') && this.view.selected >= 0) {
         e.preventDefault();
         const id = this.view.selected;
         const pos = ids.indexOf(id);
-        Game.release(id);
+        this.h.release(id);
         if (!this.view.nodes.has(id)) {
           const rest = ids.filter((x) => x !== id);
           if (rest.length) this.view.setSelected(rest[Math.min(pos, rest.length - 1)]);
@@ -784,8 +788,8 @@
       }
     }
   }
-  function announceArrow(id) {
-    const a = Game.puzzle.arrows[id];
+  function announceArrow(puzzle, id) {
+    const a = puzzle.arrows[id];
     const [x, y] = a.cells[a.cells.length - 1];
     announce(`Arrow pointing ${E.DIR_NAMES[a.dir]}, head at column ${x + 1}, row ${y + 1}, ${a.cells.length} cells long`);
   }
@@ -1102,8 +1106,39 @@
     }
   }
 
+  /* STARS: 1 for clearing a board, 2 for clearing it without hints,
+     3 for a perfect clear (no hints and no blocked taps). */
+  const MAX_STARS = 3;
+  function starsFor(sess) {
+    if (sess.hints > 0) return 1;
+    return sess.blocked > 0 ? 2 : 3;
+  }
+  function campaignStars() {
+    const lv = Save.data.campaign.levels;
+    let n = 0;
+    for (const k in lv) n += lv[k].stars || 0;
+    return n;
+  }
+  /** Older saves have no stars: give completed levels 3 if perfect, else 1. */
+  function migrateStars() {
+    const lv = Save.data.campaign.levels;
+    for (const k in lv) if (lv[k].completed && !lv[k].stars) lv[k].stars = lv[k].perfect ? 3 : 1;
+    const hist = Save.data.daily.history;
+    for (const k in hist) if (hist[k].completed && !hist[k].stars) hist[k].stars = hist[k].perfect ? 3 : 1;
+  }
+  const STAR_PATH = 'M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.3l-5.8 3.1 1.2-6.5-4.8-4.5 6.5-.8z';
+  function starIcons(n, cls) {
+    const wrap = h('span', { class: 'stars ' + (cls || ''), 'aria-hidden': 'true' });
+    for (let i = 0; i < MAX_STARS; i++) {
+      const svg = s('svg', { viewBox: '0 0 24 24', class: 'star' + (i < n ? ' is-on' : '') });
+      svg.append(s('path', { d: STAR_PATH }));
+      wrap.append(svg);
+    }
+    return wrap;
+  }
+
   function recordFinish(sess, puzzle) {
-    const res = { perfect: false, counted: counted(sess), time: sess.elapsed, notes: [] };
+    const res = { perfect: false, counted: counted(sess), time: sess.elapsed, notes: [], stars: starsFor(sess) };
     if (!res.counted) {
       res.notes.push(sess.mode === 'debug' ? 'Sandbox board. Nothing was recorded.' : 'Solved with developer tools, so it was not recorded.');
       Save.data.active = null;
@@ -1133,6 +1168,8 @@
       rec.bestBlocked = rec.bestBlocked == null ? sess.blocked : Math.min(rec.bestBlocked, sess.blocked);
       rec.completed = true;
       rec.perfect = !!rec.perfect || perfect;
+      if (rec.stars && res.stars > rec.stars) res.notes.push(`New best: ${res.stars} stars`);
+      rec.stars = Math.max(rec.stars || 0, res.stars);
       rec.clears = (rec.clears || 0) + 1;
       lv[L] = rec;
       if (L < E.CAMPAIGN_LENGTH && Save.data.campaign.unlocked <= L) {
@@ -1148,6 +1185,7 @@
         rec.completed = true;
         rec.time = sess.elapsed;
         rec.perfect = perfect;
+        rec.stars = res.stars;
         rec.diff = sess.diff;
       }
       hist[sess.key] = rec;
@@ -1193,6 +1231,8 @@
 
   /* ---------------- Home ---------------- */
   renderers.home = function () {
+    const lb = Save.data.lastBackup ? Date.parse(Save.data.lastBackup) : 0;
+    $('#home-backup-nudge').hidden = !(Save.data.stats.completed >= 5 && Date.now() - lb > 30 * 864e5);
     HeroStream.start();
     const act = Save.data.active;
     const cont = $('#home-continue');
@@ -1210,7 +1250,7 @@
     const lv = Save.data.campaign.levels;
     const done = Object.keys(lv).filter((k) => lv[k].completed).length;
     const un = Save.data.campaign.unlocked;
-    $('#home-campaign-sub').textContent = done ? `${done} / ${E.CAMPAIGN_LENGTH} cleared · next up: Level ${Math.min(un, E.CAMPAIGN_LENGTH)}` : `${E.CAMPAIGN_LENGTH} levels · Easy to ${diffLabel(E.DIFFICULTY_ORDER[E.DIFFICULTY_ORDER.length - 1])}`;
+    $('#home-campaign-sub').textContent = done ? `${done} cleared · ★ ${campaignStars()} · next up: Level ${Math.min(un, E.CAMPAIGN_LENGTH)}` : `${E.CAMPAIGN_LENGTH} levels · Easy to ${diffLabel(E.DIFFICULTY_ORDER[E.DIFFICULTY_ORDER.length - 1])}`;
     $('#home-campaign-bar').style.width = `${pct(done, E.CAMPAIGN_LENGTH)}%`;
 
     const today = dateKey();
@@ -1237,7 +1277,7 @@
     let total = 0;
     for (const tier of E.CAMPAIGN_TIERS) {
       const grid = h('div', { class: 'level-grid' });
-      let done = 0;
+      let done = 0, tierStars = 0;
       for (let L = tier.from; L <= tier.to; L++) {
         const rec = lv[L] || {};
         if (rec.completed) done++;
@@ -1247,10 +1287,12 @@
         if (rec.perfect) cls.push('is-perfect');
         if (L === unlocked && !rec.completed) cls.push('is-next');
         const label = locked ? `Level ${L}, locked`
-          : `Level ${L}, ${diffLabel(tier.diff)}${rec.completed ? ', completed' : ''}${rec.perfect ? ', perfect' : ''}${rec.bestTime != null ? ', best time ' + fmtTime(rec.bestTime) : ''}`;
-        const btn = h('button', { class: cls.join(' '), type: 'button', disabled: locked, 'aria-label': label, 'data-level': L },
+          : `Level ${L}, ${diffLabel(tier.diff)}${rec.completed ? `, ${rec.stars || 1} of 3 stars` : ''}${rec.bestTime != null ? ', best time ' + fmtTime(rec.bestTime) : ''}`;
+        const btn = h('button', { class: cls.join(' '), type: 'button', disabled: locked, 'aria-label': label, 'data-level': L,
+          title: rec.bestTime != null ? `Best time ${fmtTime(rec.bestTime)}` : null },
           h('span', { class: 'level-num', text: String(L) }),
-          rec.bestTime != null ? h('span', { class: 'level-best', text: fmtTime(rec.bestTime) }) : null);
+          rec.completed ? starIcons(rec.stars || 1, 'tiny') : null);
+        tierStars += rec.stars || 0;
         grid.append(btn);
       }
       total += done;
@@ -1258,10 +1300,10 @@
       wrap.append(h('section', { class: 'tier' },
         h('div', { class: 'tier-head' },
           h('h3', null, h('span', { class: 'diff-chip diff-' + tier.diff, text: diffLabel(tier.diff) }), `Levels ${tier.from}–${tier.to}`),
-          h('span', { class: 'tier-count', text: `${done} / ${count}` })),
+          h('span', { class: 'tier-count' }, `${done} / ${count}`, h('span', { class: 'tier-stars', text: ` · ★ ${tierStars}/${count * 3}` }))),
         grid));
     }
-    $('#campaign-count').textContent = `${total} / ${E.CAMPAIGN_LENGTH}`;
+    $('#campaign-count').textContent = `★ ${campaignStars()} / ${E.CAMPAIGN_LENGTH * 3}`;
     const next = wrap.querySelector('.is-next');
     if (next) requestAnimationFrame(() => next.scrollIntoView({ block: 'center', behavior: 'auto' }));
   };
@@ -1447,7 +1489,8 @@
         row('Highest level unlocked', `Level ${Save.data.campaign.unlocked}`),
         row('Levels completed', `${campDone} / ${E.CAMPAIGN_LENGTH}`),
         ...E.CAMPAIGN_TIERS.map((t) => row(`${diffLabel(t.diff)} levels completed`, `${doneBy[t.diff] || 0} / ${t.to - t.from + 1}`)),
-        row('Campaign perfect clears', `${perfectCamp.n}`))));
+        row('Campaign perfect clears', `${perfectCamp.n}`),
+        row('Campaign stars', `★ ${campaignStars()} / ${E.CAMPAIGN_LENGTH * 3}`))));
 
     body.append(section('Daily', h('div', { class: 'stat-rows' },
       row('Daily puzzles attempted', fmtNum(tot.attempted)),
@@ -1477,6 +1520,7 @@
   /* ---------------- Settings ---------------- */
   let versionTaps = 0;
   renderers.settings = function () {
+    renderBackupStatus();
     const st = Save.data.settings;
     $('#set-sound').checked = !!st.sound;
     $('#set-motion').value = st.motion;
@@ -1575,7 +1619,16 @@
     else if (sess.mode === 'zen') kicker = `Zen · ${diffLabel(sess.diff)}`;
     else kicker = 'Sandbox';
     $('#complete-kicker').textContent = kicker;
-    $('#complete-title').textContent = res.perfect ? '★ Perfect' : 'Cleared';
+    $('#complete-title').textContent = res.perfect ? 'Perfect' : 'Cleared';
+    const starBox = $('#complete-stars');
+    starBox.textContent = '';
+    starBox.hidden = !res.counted;
+    if (res.counted) {
+      starBox.append(starIcons(res.stars, 'big'));
+      starBox.setAttribute('aria-label', `${res.stars} of ${MAX_STARS} stars`);
+      if (res.stars === 1) res.notes.push('Clear it without hints for 2 stars');
+      else if (res.stars === 2) res.notes.push('Clear it without a blocked tap for 3 stars');
+    }
     if (usesHearts(sess.mode) && res.counted && sess.hearts < MAX_HEARTS) res.notes.push(`${sess.hearts} of ${MAX_HEARTS} hearts left`);
     $('#complete-note').textContent = res.notes.join(' · ');
     const stats = $('#complete-stats');
@@ -1631,6 +1684,7 @@
     const sheet = $('.complete-sheet', ov);
     sheet.classList.remove('is-perfect');
     sheet.classList.add('is-failed');
+    $('#complete-stars').hidden = true;
     $('.burst', ov).textContent = '';
     $('#complete-kicker').textContent = sess.mode === 'campaign' ? `Level ${sess.key} · ${diffLabel(sess.diff)}` : `Daily · ${shortDate(sess.key)}`;
     $('#complete-title').textContent = 'Out of hearts';
@@ -1700,12 +1754,12 @@
      SMALL UI HELPERS
      ====================================================================== */
   let toastTimer = 0;
-  function toast(msg) {
+  function toast(msg, ms) {
     const t = $('#toast');
     t.textContent = msg;
     t.classList.add('is-on');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('is-on'), 2400);
+    toastTimer = setTimeout(() => t.classList.remove('is-on'), ms || 2400);
   }
   let liveTimer = 0;
   function announce(msg) {
@@ -1714,13 +1768,298 @@
     l.textContent = '';
     liveTimer = setTimeout(() => { l.textContent = msg; }, 30);
   }
+  const touchScreen = () => !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  const ZOOM_TIP_TOUCH = 'Use two fingers to zoom: spread them apart to zoom in, bring them together to zoom out. Drag with one finger to move around.';
+  const ZOOM_TIP_MOUSE = 'Scroll to zoom in and out. Drag to move around.';
+  /** Shown the first two times a board is small enough to need zooming. */
   function maybeZoomTip(view) {
-    if (Save.data.seenZoomTip) return;
+    if ((Save.data.zoomTips || 0) >= 2) return;
     if (view.cellPx() && view.cellPx() < 30) {
-      Save.data.seenZoomTip = true;
-      toast('Tip: pinch or use + to zoom in on big boards');
+      Save.data.zoomTips = (Save.data.zoomTips || 0) + 1;
+      toast(touchScreen() ? ZOOM_TIP_TOUCH : ZOOM_TIP_MOUSE, 6500);
     }
   }
+
+  /* ======================================================================
+     HOW TO PLAY — four short steps with small hand-made practice boards.
+     Uses its own BoardView/BoardState, so nothing here touches progress
+     or statistics. Shown automatically on a brand-new install.
+     ====================================================================== */
+  /** Build a practice puzzle from tail→head cell lists. */
+  function practiceBoard(cols, rows, list) {
+    const arrows = list.map((a, id) => {
+      const [p, q] = [a.cells[a.cells.length - 2], a.cells[a.cells.length - 1]];
+      const dir = q[0] > p[0] ? 1 : q[0] < p[0] ? 3 : q[1] > p[1] ? 2 : 0;
+      return { id, dir, cells: a.cells, color: a.color };
+    });
+    const p = { cols, rows, mask: new Array(cols * rows).fill(1), arrows, solution: [], meta: {} };
+    p.solution = E.analyze(p).order;
+    return p;
+  }
+  const HOWTO_STEPS = [
+    {
+      title: 'Tap an arrow',
+      text: 'Each arrow flies off the board in the direction its head points. Tap the arrow to set it free.',
+      done: 'That’s it! It flew straight off the board.',
+      board: () => practiceBoard(5, 3, [{ cells: [[0, 1], [1, 1], [2, 1]], color: 4 }]),
+      pulse: 0,
+    },
+    {
+      title: 'Arrows can block each other',
+      text: 'An arrow can’t fly through another arrow. Try the arrow pointing right.',
+      blocked: 'Blocked! The arrow pointing up is in the way. Tap it first, then try again.',
+      cleared: 'The path is clear now. Tap the arrow pointing right.',
+      done: 'Nice. Finding the right order is the whole game.',
+      board: () => practiceBoard(5, 5, [
+        { cells: [[0, 2], [1, 2], [2, 2]], color: 0 },
+        { cells: [[3, 3], [3, 2], [3, 1]], color: 3 },
+      ]),
+      pulse: 0,
+    },
+    {
+      title: 'Clear the whole board',
+      text: 'Bent arrows follow their own path out. Start with arrows that have a clear way to the edge.',
+      blocked: 'Blocked, but no harm done here. Look for an arrow with nothing in front of it.',
+      done: 'You solved it! Every board works like this, just bigger.',
+      board: () => practiceBoard(5, 5, [
+        { cells: [[0, 0], [1, 0], [2, 0]], color: 0 },               // blocked by the bent one
+        { cells: [[2, 1], [3, 1], [4, 1], [4, 0]], color: 4 },       // bent, free
+        { cells: [[3, 2], [2, 2], [1, 2]], color: 6 },               // blocked by the one below
+        { cells: [[0, 1], [0, 2], [0, 3]], color: 1 },               // blocked by the bottom one
+        { cells: [[0, 4], [1, 4], [2, 4], [3, 4]], color: 3 },       // free
+      ]),
+    },
+    { title: 'Good to know', tips: true },
+  ];
+  const HowTo = {
+    step: 0, view: null, board: null, cleared: false, pulseTimer: 0,
+    init() {
+      this.view = new BoardView($('#howto-board'));
+      new Input(this.view, $('#howto-board'), this);
+      $('#howto-next').addEventListener('click', () => this.next());
+      $('#howto-skip').addEventListener('click', () => this.finish());
+    },
+    open() {
+      Save.data.seenHowTo = true;
+      Save.soon();
+      this.show(0);
+    },
+    show(i) {
+      this.step = i;
+      const st = HOWTO_STEPS[i];
+      $('#howto-step').textContent = `Step ${i + 1} of ${HOWTO_STEPS.length}`;
+      $('#howto-title').textContent = st.title;
+      const dots = $('#howto-dots');
+      dots.textContent = '';
+      HOWTO_STEPS.forEach((_, k) => dots.append(h('i', { class: k === i ? 'is-on' : k < i ? 'is-done' : '' })));
+      const last = i === HOWTO_STEPS.length - 1;
+      $('#howto-skip').hidden = last;
+      $('#howto-next').textContent = last ? 'Start playing' : 'Next';
+      $('#howto-board-wrap').hidden = !!st.tips;
+      $('#howto-tips').hidden = !st.tips;
+      clearTimeout(this.pulseTimer);
+      if (st.tips) {
+        $('#howto-text').textContent = '';
+        this.renderTips();
+        this.board = null;
+        $('#howto-next').disabled = false;
+        return;
+      }
+      $('#howto-text').textContent = st.text;
+      $('#howto-next').disabled = true;
+      this.cleared = false;
+      const p = st.board();
+      this.board = new E.BoardState(p);
+      requestAnimationFrame(() => {
+        this.view.load(p, this.board);
+        // Nudge a first-timer who hasn't tapped anything yet.
+        if (st.pulse != null) this.pulseTimer = setTimeout(() => { if (this.board && this.board.alive.has(st.pulse)) this.view.showHint(st.pulse); }, 1600);
+      });
+    },
+    renderTips() {
+      const ICONS = {
+        heart: '<path d="M12 20.5s-7.3-4.5-9.3-9C1.3 8.3 3.3 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.6 0 5.6 3.8 4.2 7-2 4.5-9.3 9-9.3 9z"/>',
+        hint: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
+        star: `<path d="${STAR_PATH}"/>`,
+        pinch: '<path d="M7 7l-3-3M4 8V4h4M17 17l3 3M20 16v4h-4"/><circle cx="12" cy="12" r="2.2"/>',
+        save: '<path d="M12 3v12M7 10l5 5 5-5M5 20h14"/>',
+      };
+      const tips = [
+        ['heart', 'Campaign and Daily give you 3 hearts. Each blocked tap costs one, and losing all 3 restarts the board.'],
+        ['hint', 'Stuck? Tap Hint and a safe arrow lights up.'],
+        ['star', 'Earn up to 3 stars: clear the board, clear it without hints, then clear it without a single blocked tap.'],
+        ['pinch', touchScreen() ? 'On big boards, use two fingers to zoom: spread them apart to zoom in, bring them together to zoom out. Drag with one finger to move around.' : 'On big boards, scroll to zoom in and out, and drag to move around.'],
+        ['save', 'Your progress lives in this app. Removing the app deletes it, so make a backup in Settings first.'],
+      ];
+      const ul = $('#howto-tips');
+      ul.innerHTML = tips.map(([k, t]) => `<li><svg viewBox="0 0 24 24" class="tip-${k}" aria-hidden="true">${ICONS[k]}</svg><span>${t}</span></li>`).join('');
+    },
+    inputLocked() { return !this.board || this.cleared || currentScreen !== 'howto'; },
+    release(id) {
+      const b = this.board, st = HOWTO_STEPS[this.step];
+      if (!b || !b.alive.has(id)) return;
+      clearTimeout(this.pulseTimer);
+      const blocker = b.firstBlocker(id);
+      if (blocker) {
+        this.view.blocked(id, blocker);
+        Sound.play('blocked');
+        if (st.blocked) $('#howto-text').textContent = st.blocked;
+        return;
+      }
+      b.remove(id);
+      this.view.escape(id);
+      Sound.play('escape', b.arrowsGone = (b.arrowsGone || 0) + 1);
+      if (b.count === 0) {
+        this.cleared = true;
+        $('#howto-text').textContent = st.done;
+        $('#howto-next').disabled = false;
+        setTimeout(() => Sound.play('complete'), 250);
+        setTimeout(() => $('#howto-next').focus(), 300);
+      } else if (st.cleared && b.alive.has(0) && !b.firstBlocker(0)) {
+        $('#howto-text').textContent = st.cleared;
+        this.view.showHint(0);
+      }
+    },
+    next() {
+      if (this.step < HOWTO_STEPS.length - 1) { this.show(this.step + 1); return; }
+      this.finish(true);
+    },
+    finish(play) {
+      clearTimeout(this.pulseTimer);
+      this.board = null;
+      const lv = Save.data.campaign.levels;
+      if (play && !(lv[1] && lv[1].completed)) Game.open('campaign', 1);
+      else showScreen('home');
+    },
+  };
+  renderers.howto = function () { HowTo.open(); };
+
+  /* ======================================================================
+     BACKUP & RESTORE — the whole save as one text code.
+     Format: "SLIP1." + base64url(gzip(JSON)) where the browser can
+     compress, otherwise "SLIP0." + base64url(JSON).
+     ====================================================================== */
+  const Backup = {
+    toB64(bytes) {
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    },
+    fromB64(str) {
+      str = str.replace(/-/g, '+').replace(/_/g, '/');
+      while (str.length % 4) str += '=';
+      const bin = atob(str);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    },
+    async pipe(bytes, stream) {
+      const res = new Response(new Blob([bytes]).stream().pipeThrough(stream));
+      return new Uint8Array(await res.arrayBuffer());
+    },
+    async encode() {
+      Save.data.lastBackup = new Date().toISOString();
+      const json = JSON.stringify({ app: 'slipstream', savedAt: Save.data.lastBackup, data: Save.data });
+      const raw = new TextEncoder().encode(json);
+      if (window.CompressionStream) {
+        try { return 'SLIP1.' + this.toB64(await this.pipe(raw, new CompressionStream('gzip'))); } catch (e) { /* fall through */ }
+      }
+      return 'SLIP0.' + this.toB64(raw);
+    },
+    async decode(code) {
+      code = String(code || '').replace(/\s+/g, '');
+      const m = /^SLIP([01])\.([A-Za-z0-9_-]+)$/.exec(code);
+      if (!m) throw new Error('That doesn’t look like a Slipstream backup code. Make sure you copied all of it.');
+      let bytes = this.fromB64(m[2]);
+      if (m[1] === '1') {
+        if (!window.DecompressionStream) throw new Error('This browser is too old to read this backup. Try updating it.');
+        bytes = await this.pipe(bytes, new DecompressionStream('gzip'));
+      }
+      const obj = JSON.parse(new TextDecoder().decode(bytes));
+      if (!obj || obj.app !== 'slipstream' || !obj.data || !obj.data.campaign || !obj.data.stats) throw new Error('This backup is damaged or from a different app.');
+      return obj;
+    },
+    fileName() { return `slipstream-backup-${dateKey()}.txt`; },
+  };
+  function renderBackupStatus() {
+    const lb = Save.data.lastBackup;
+    $('#backup-last').textContent = lb ? `Last backup: ${shortDate(dateKey(new Date(lb)))}, ${new Date(lb).getFullYear()}` : 'No backup yet';
+  }
+  $('#backup-copy').addEventListener('click', async () => {
+    const box = $('#backup-code');
+    let code;
+    try { code = await Backup.encode(); } catch (e) { toast('Could not make a backup code on this device.'); return; }
+    Save.write();
+    renderBackupStatus();
+    box.value = code;
+    try {
+      await navigator.clipboard.writeText(code);
+      box.hidden = true;
+      toast('Backup code copied. Paste it into Notes or a message to yourself.', 4200);
+    } catch (e) {
+      box.hidden = false;
+      box.focus();
+      box.select();
+      toast('Copy this code and keep it somewhere safe.', 4200);
+    }
+  });
+  $('#backup-file').addEventListener('click', async () => {
+    let code;
+    try { code = await Backup.encode(); } catch (e) { toast('Could not make a backup on this device.'); return; }
+    Save.write();
+    renderBackupStatus();
+    const file = new File([code], Backup.fileName(), { type: 'text/plain' });
+    try {
+      // Phones: the share sheet offers "Save to Files", AirDrop, Messages and so on.
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Slipstream backup' });
+        return;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+    const a = h('a', { href: URL.createObjectURL(file), download: Backup.fileName() });
+    document.body.append(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast('Backup file saved.');
+  });
+  async function restoreFrom(code) {
+    let obj;
+    try { obj = await Backup.decode(code); } catch (e) { toast(e.message || 'That backup code didn’t work.', 4200); return; }
+    const d = obj.data;
+    const lv = d.campaign.levels || {};
+    const levels = Object.keys(lv).filter((k) => lv[k].completed).length;
+    const when = obj.savedAt ? `${shortDate(dateKey(new Date(obj.savedAt)))}, ${new Date(obj.savedAt).getFullYear()}` : 'an unknown date';
+    const yes = await confirmDialog({
+      title: 'Restore this backup?',
+      body: `<p>Backup from ${when}: ${levels} campaign level${levels === 1 ? '' : 's'} cleared, ${fmtNum(d.stats.completed || 0)} boards completed.</p><p class="hold-note">This replaces the progress currently on this device.</p>`,
+      ok: 'Restore',
+    });
+    if (!yes) return;
+    Save.data = fillDefaults(d, defaultSave());
+    Save.data.route = 'home';
+    Save.data.seenHowTo = true;
+    migrateStars();
+    Save.write();
+    puzzleCache.clear();
+    calMonth = null;
+    $('#restore-code').value = '';
+    applySettings();
+    showScreen('home');
+    toast('Progress restored');
+  }
+  $('#restore-go').addEventListener('click', () => {
+    const v = $('#restore-code').value.trim();
+    if (!v) { toast('Paste a backup code first.'); $('#restore-code').focus(); return; }
+    restoreFrom(v);
+  });
+  $('#restore-file').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!f) return;
+    try { restoreFrom(await f.text()); } catch (err) { toast('Could not read that file.'); }
+  });
 
   /* ======================================================================
      HERO STREAM — the arrows gliding past above the title.
@@ -1845,9 +2184,10 @@
   $('#game-back').addEventListener('click', () => Game.leave());
   $('#btn-hint').addEventListener('click', () => Game.hint());
   $('#btn-restart').addEventListener('click', () => Game.restart());
-  $('#zoom-in').addEventListener('click', () => { const r = Game.view.svg.getBoundingClientRect(); Game.view.zoomBy(1.35, r.left + r.width / 2, r.top + r.height / 2); });
-  $('#zoom-out').addEventListener('click', () => { const r = Game.view.svg.getBoundingClientRect(); Game.view.zoomBy(1 / 1.35, r.left + r.width / 2, r.top + r.height / 2); });
-  $('#zoom-fit').addEventListener('click', () => Game.view.fit());
+  function zoomCenter(f) {
+    const r = Game.view.svg.getBoundingClientRect();
+    Game.view.zoomBy(f, r.left + r.width / 2, r.top + r.height / 2);
+  }
 
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, select, textarea')) return;
@@ -1863,8 +2203,8 @@
     if (!$('#complete-overlay').hidden) return;
     const k = e.key.toLowerCase();
     if (k === 'h') Game.hint();
-    else if (k === '+' || k === '=') $('#zoom-in').click();
-    else if (k === '-' || k === '_') $('#zoom-out').click();
+    else if (k === '+' || k === '=') zoomCenter(1.35);
+    else if (k === '-' || k === '_') zoomCenter(1 / 1.35);
     else if (k === '0') Game.view.fit();
   });
 
@@ -1893,14 +2233,18 @@
   function boot() {
     Save.load();
     if (/debug/.test(location.hash)) Save.data.settings.dev = true;
+    migrateStars();
     HeroStream.init();
     Game.view = new BoardView($('#board'));
     new Input(Game.view, $('#board'));
+    HowTo.init();
     applySettings();
     // A board saved by an older generator can't be rebuilt identically; drop it.
     if (Save.data.active && Save.data.active.gen !== E.GENERATOR_VERSION) Save.data.active = null;
     const a = Save.data.active;
-    if (Save.data.route === 'game' && a && !a.done) Game.open(a.mode, a.key, a.diff);
+    const brandNew = !Save.data.seenHowTo && Save.data.stats.played === 0 && !a;
+    if (brandNew) showScreen('howto');
+    else if (Save.data.route === 'game' && a && !a.done) Game.open(a.mode, a.key, a.diff);
     else showScreen(Save.data.route === 'game' ? 'home' : Save.data.route || 'home');
     if (!Save.ok) setTimeout(() => toast('This browser is blocking storage, so progress will not be saved.'), 600);
   }
