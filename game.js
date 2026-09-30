@@ -1319,8 +1319,6 @@
 
   /* ---------------- Home ---------------- */
   renderers.home = function () {
-    const lb = Save.data.lastBackup ? Date.parse(Save.data.lastBackup) : 0;
-    $('#home-backup-nudge').hidden = !(Save.data.stats.completed >= 5 && Date.now() - lb > 30 * 864e5);
     HeroStream.start();
     const act = Save.data.active;
     const cont = $('#home-continue');
@@ -1949,9 +1947,10 @@
       $('#howto-next').disabled = true;
       this.cleared = false;
       const p = st.board();
-      this.board = new E.BoardState(p);
+      const board = this.board = new E.BoardState(p);
       requestAnimationFrame(() => {
-        this.view.load(p, this.board);
+        if (this.board !== board) return;   // moved to another step before this one drew
+        this.view.load(p, board);
         // Nudge a first-timer who hasn't tapped anything yet.
         if (st.pulse != null) this.pulseTimer = setTimeout(() => { if (this.board && this.board.alive.has(st.pulse)) this.view.showHint(st.pulse); }, 1600);
       });
@@ -1974,7 +1973,12 @@
         ['save', 'Your progress lives in this app. Removing the app deletes it, so make a backup in Settings first.'],
       ];
       const ul = $('#howto-tips');
-      ul.innerHTML = tips.map(([k, t]) => `<li><svg viewBox="0 0 24 24" class="tip-${k}" aria-hidden="true">${ICONS[k]}</svg><span>${t}</span></li>`).join('');
+      ul.innerHTML = tips.map(([k, t]) => `<li><svg viewBox="0 0 24 24" class="tip-${k}" aria-hidden="true">${ICONS[k]}</svg><span>${t}${k === 'save' ? '<button type="button" class="tip-link" id="howto-backup">Back up now →</button>' : ''}</span></li>`).join('');
+      $('#howto-backup').addEventListener('click', () => {
+        this.finish(false);
+        showScreen('settings');
+        requestAnimationFrame(() => $('#backup-block').scrollIntoView({ block: 'start' }));
+      });
     },
     inputLocked() { return !this.board || this.cleared || currentScreen !== 'howto'; },
     release(id) {
