@@ -79,7 +79,7 @@
       segMin: [2, 1], segMax: [4, 3], maxBends: [2, 4],
       blockBias: [0.6, 1.2], candidates: [5, 9],
       maxFreeRatio: [0.6, 0.45], minDepth: [2, 4],
-      shapes: ['rect', 'rect', 'notch'],
+      shapes: ['rect', 'notch'],
     },
     medium: {
       id: 'medium', label: 'Medium', rank: 2,
@@ -157,15 +157,20 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
   /** Turn a difficulty + t into the concrete numbers the generator uses. */
-  function resolveParams(diffId, t, rng) {
+  function resolveParams(diffId, t, rng, forceShape) {
     const d = DIFFICULTIES[diffId];
     if (!d) throw new Error('Unknown difficulty ' + diffId);
     t = clamp(t, 0, 1);
     const cols = clamp(Math.round(at(d.cols, t) + rng.range(-0.7, 0.7)), 4, 60);
     const rows = clamp(Math.round(at(d.rows, t) + rng.range(-0.7, 0.7)), 4, 60);
     // Early levels of a tier always use a plain rectangle; shapes appear later.
-    const shape = t < 0.25 ? 'rect' : rng.pick(d.shapes);
-    const mask = buildMask(shape, cols, rows);
+    // Which boards are plain rectangles is unchanged from v3 (so those boards
+    // stay identical); every other board gets a randomly generated outline.
+    let shape = t < 0.25 ? 'rect' : rng.pick(d.shapes);
+    if (forceShape) shape = forceShape; // developer tools / previews only
+    let mask;
+    if (shape === 'rect') mask = buildMask('rect', cols, rows);
+    else ({ shape, mask } = randomShape(cols, rows, rng, forceShape));
     let playable = 0;
     for (let i = 0; i < mask.length; i++) playable += mask[i];
     const pairAt = (pp) => [Math.round(at([pp[0][0], pp[1][0]], t)), Math.round(at([pp[0][1], pp[1][1]], t))];
@@ -221,6 +226,204 @@
       }
     }
     return m;
+  }
+
+  /* ------------------------------------------------------------------
+     Random board outlines (v4). Each family takes random proportions, so
+     no two boards look the same. A shape is tested at every cell centre
+     in a unit space of x, y in [-1, 1]. Afterwards only the largest
+     connected region is kept, and shapes that would leave the board too
+     empty are rejected and re-rolled.
+     ------------------------------------------------------------------ */
+  const SMALL_SHAPES = ['blob', 'sym', 'diamond', 'heart', 'wave', 'bites', 'steps', 'oval'];
+  const BIG_SHAPES = SMALL_SHAPES.concat(['holes', 'hourglass', 'ring', 'cross', 'sym', 'blob']);
+  const HUGE_SHAPES = BIG_SHAPES.concat(['star', 'star']); // stars only read as stars on big boards
+  function shapeTest(family, rng, cols, rows) {
+    const R = (a, b) => rng.range(a, b);
+    switch (family) {
+      case 'blob': case 'sym': {
+        const n = rng.int(3, 5), cs = [];
+        for (let i = 0; i < n; i++) cs.push([R(-0.55, family === 'sym' ? 0 : 0.55), R(-0.55, 0.55), R(0.42, 0.7)]);
+        if (family === 'sym') cs.push([0, R(-0.3, 0.3), R(0.45, 0.65)]); // keeps the halves joined
+        return (x, y) => {
+          const xx = family === 'sym' ? -Math.abs(x) : x;
+          for (const [cx, cy, r] of cs) { const dx = (xx - cx) / r, dy = (y - cy) / r; if (dx * dx + dy * dy <= 1) return true; }
+          return false;
+        };
+      }
+      case 'diamond': {
+        const k = R(1.0, 1.25), squash = R(0.75, 1);
+        return (x, y) => Math.abs(x) * squash + Math.abs(y) <= k;
+      }
+      case 'heart': {
+        const sx = R(1.15, 1.3), sy = R(1.15, 1.3);
+        return (x, y) => { const X = x * sx, Y = -y * sy + 0.25; const a = X * X + Y * Y - 1; return a * a * a - X * X * Y * Y * Y <= 0; };
+      }
+      case 'star': {
+        const k = rng.int(4, 5), amp = R(0.28, 0.4), rot = R(0, Math.PI * 2);
+        return (x, y) => Math.hypot(x, y) <= 0.86 * (1 + amp * Math.cos(k * Math.atan2(y, x) + rot));
+      }
+      case 'wave': {
+        const f = R(1.2, 2.6), a = R(0.12, 0.24), p1 = R(0, 6.3), p2 = R(0, 6.3), side = rng.chance(0.5);
+        return (x, y) => {
+          const u = side ? y : x, v = side ? x : y;
+          return v > -0.92 + a + a * Math.sin(f * Math.PI * u + p1) && v < 0.92 - a + a * Math.sin(f * Math.PI * u + p2);
+        };
+      }
+      case 'bites': {
+        const n = rng.int(3, 6), bs = [];
+        for (let i = 0; i < n; i++) {
+          const along = R(-0.8, 0.8), r = R(0.22, 0.42), e = rng.int(0, 3);
+          bs.push([[along, -1], [1, along], [along, 1], [-1, along]][e].concat(r));
+        }
+        return (x, y) => { for (const [cx, cy, r] of bs) if (Math.hypot(x - cx, y - cy) < r) return false; return true; };
+      }
+      case 'steps': {
+        const k = R(0.3, 0.55), n = rng.int(2, 4), flip = rng.chance(0.5);
+        const step = (v) => Math.ceil(v * n) / n;
+        return (x, y) => {
+          const X = flip ? -x : x;
+          return !((1 - X) / 2 < k && step((1 - y) / 2) < k - (1 - X) / 2 + 0.01) && !((1 + X) / 2 < k && step((1 + y) / 2) < k - (1 + X) / 2 + 0.01);
+        };
+      }
+      case 'oval': {
+        const e = R(1.0, 1.15);
+        return (x, y) => x * x + y * y <= e;
+      }
+      case 'holes': {
+        const n = rng.int(2, 4), hs = [];
+        // Half-sizes in unit space; at least 2 cells across so a hole never looks like a glitch.
+        for (let i = 0; i < n; i++) hs.push([R(-0.55, 0.55), R(-0.6, 0.6), Math.max(R(0.1, 0.2), 2.05 / cols), Math.max(R(0.08, 0.18), 2.05 / rows)]);
+        return (x, y) => { for (const [cx, cy, w, h] of hs) if (Math.abs(x - cx) < w && Math.abs(y - cy) < h) return false; return true; };
+      }
+      case 'hourglass': {
+        const a = R(0.3, 0.5), sideways = rng.chance(0.35);
+        return (x, y) => { const u = sideways ? y : x, v = sideways ? x : y; return Math.abs(u) <= 1 - a * Math.cos(v * Math.PI / 2); };
+      }
+      case 'ring': {
+        const r = R(0.3, 0.45), e = R(1.0, 1.12);
+        return (x, y) => x * x + y * y <= e && Math.hypot(x * 1.1, y) > r;
+      }
+      case 'cross': {
+        const w = R(0.35, 0.6), h = R(0.35, 0.6);
+        return (x, y) => Math.abs(x) <= w || Math.abs(y) <= h;
+      }
+    }
+    return () => true;
+  }
+  /** Keep only the largest 4-connected group of cells. */
+  function largestRegion(m, cols, rows) {
+    const seen = new Int32Array(m.length).fill(-1);
+    let best = -1, bestSize = 0, id = 0;
+    for (let i = 0; i < m.length; i++) {
+      if (!m[i] || seen[i] !== -1) continue;
+      let size = 0;
+      const stack = [i];
+      seen[i] = id;
+      while (stack.length) {
+        const c = stack.pop(); size++;
+        const x = c % cols, y = (c - x) / cols;
+        for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+          const n = ny * cols + nx;
+          if (m[n] && seen[n] === -1) { seen[n] = id; stack.push(n); }
+        }
+      }
+      if (size > bestSize) { bestSize = size; best = id; }
+      id++;
+    }
+    for (let i = 0; i < m.length; i++) m[i] = seen[i] === best ? 1 : 0;
+    return bestSize;
+  }
+  /* Perlin noise (classic 2D gradient noise), seeded from the board's RNG. */
+  function makePerlin(rng) {
+    const p = new Uint8Array(512), perm = Array.from({ length: 256 }, (_, i) => i);
+    for (let i = 255; i > 0; i--) { const j = Math.floor(rng.float() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+    for (let i = 0; i < 512; i++) p[i] = perm[i & 255];
+    const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+    const grad = (h, x, y) => { switch (h & 7) { case 0: return x + y; case 1: return -x + y; case 2: return x - y; case 3: return -x - y; case 4: return x; case 5: return -x; case 6: return y; default: return -y; } };
+    const lerp1 = (a, b, t) => a + t * (b - a);
+    return (x, y) => {
+      const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+      x -= Math.floor(x); y -= Math.floor(y);
+      const u = fade(x), v = fade(y);
+      const aa = p[p[X] + Y], ab = p[p[X] + Y + 1], ba = p[p[X + 1] + Y], bb = p[p[X + 1] + Y + 1];
+      return lerp1(lerp1(grad(aa, x, y), grad(ba, x - 1, y), u), lerp1(grad(ab, x, y - 1), grad(bb, x - 1, y - 1), u), v) * 0.7;
+    };
+  }
+  /** Organic outline: layered Perlin noise, faded toward the frame edge. */
+  function perlinTest(rng) {
+    const noise = makePerlin(rng);
+    const f = rng.range(1.3, 2.3), ox = rng.range(0, 200), oy = rng.range(0, 200);
+    const amp = rng.range(1.6, 2.2), bias = rng.range(0.3, 0.42);
+    return (x, y) => {
+      let n = 0, a = 1, fr = f, tot = 0;
+      for (let o = 0; o < 3; o++) { n += a * noise(x * fr + ox, y * fr + oy); tot += a; a *= 0.5; fr *= 2; }
+      n /= tot;
+      const r2 = x * x + y * y;
+      return n * amp + bias - 0.5 * r2 > 0;
+    };
+  }
+  /** Tidy a noise shape: fill tiny enclosed holes and trim one-cell spikes. */
+  function tidyMask(m, cols, rows) {
+    const seen = new Uint8Array(m.length);
+    for (let i = 0; i < m.length; i++) {
+      if (m[i] || seen[i]) continue;
+      const cells = [], stack = [i]; let edge = false; seen[i] = 1;
+      while (stack.length) {
+        const c = stack.pop(); cells.push(c);
+        const x = c % cols, y = (c - x) / cols;
+        if (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) edge = true;
+        for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) {
+          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+          const n = ny * cols + nx;
+          if (!m[n] && !seen[n]) { seen[n] = 1; stack.push(n); }
+        }
+      }
+      if (!edge && cells.length <= 5) for (const c of cells) m[c] = 1;
+    }
+    for (let pass = 0; pass < 3; pass++) {
+      let changed = false;
+      for (let i = 0; i < m.length; i++) {
+        if (!m[i]) continue;
+        const x = i % cols, y = (i - x) / cols;
+        let nb = 0;
+        if (x > 0 && m[i - 1]) nb++; if (x < cols - 1 && m[i + 1]) nb++;
+        if (y > 0 && m[i - cols]) nb++; if (y < rows - 1 && m[i + cols]) nb++;
+        if (nb <= 1) { m[i] = 0; changed = true; }
+      }
+      if (!changed) break;
+    }
+  }
+  const PERLIN_SHARE = 1 / 3; // share of shaped boards that get a Perlin outline
+  function randomShape(cols, rows, rng, force) {
+    // v5: about a third of shaped boards get an organic Perlin outline. The
+    // decision uses a copy of the RNG, so every other board stays identical.
+    if (!force) {
+      const side = new RNG('perlin');
+      side.s = (rng.s ^ 0x9e3779b9) | 0;
+      if (side.float() < PERLIN_SHARE) {
+        const r = randomShape(cols, rows, side, 'perlin');
+        if (r.shape === 'perlin') return r;
+      }
+    }
+    const families = cols * rows >= 350 ? HUGE_SHAPES : cols * rows >= 150 ? BIG_SHAPES : SMALL_SHAPES;
+    for (let tries = 0; tries < 12; tries++) {
+      const family = force || rng.pick(families);
+      const inside = family === 'perlin' ? perlinTest(rng) : shapeTest(family, rng, cols, rows);
+      const m = new Uint8Array(cols * rows);
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        m[y * cols + x] = inside(((x + 0.5) / cols) * 2 - 1, ((y + 0.5) / rows) * 2 - 1) ? 1 : 0;
+      }
+      if (family === 'perlin') tidyMask(m, cols, rows);
+      const size = largestRegion(m, cols, rows);
+      // Must still fill most of the frame, touching (nearly) every side.
+      let x0 = cols, x1 = -1, y0 = rows, y1 = -1;
+      for (let i = 0; i < m.length; i++) if (m[i]) { const x = i % cols, y = (i - x) / cols; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+      const spanOk = x1 - x0 + 1 >= cols - 2 && y1 - y0 + 1 >= rows - 2;
+      if (size >= cols * rows * 0.5 && size <= cols * rows * 0.97 && spanOk) return { shape: family, mask: m };
+    }
+    return { shape: 'notch', mask: buildMask('notch', cols, rows) };
   }
 
   /* ------------------------------------------------------------------
@@ -800,7 +1003,7 @@
     }
   }
 
-  /** Neighbouring arrows get different colours (greedy graph colouring). */
+  /** Neighbouring arrows get different colors (greedy graph coloring). */
   function assignColors(arrows, cols, rows, rng, paletteSize) {
     const occ = new Int16Array(cols * rows).fill(-1);
     for (const a of arrows) for (const [x, y] of a.cells) occ[y * cols + x] = a.id;
@@ -832,11 +1035,11 @@
    * a board is accepted only if the validator proves it solvable, the
    * stored solution replays cleanly, and it is non-trivial for its tier.
    */
-  function generate({ seed, diff, t }) {
+  function generate({ seed, diff, t, shape }) {
     const started = Date.now();
     const prng = new RNG(seed + '|params');
     if (t == null) t = prng.float();
-    const params = resolveParams(diff, t, prng);
+    const params = resolveParams(diff, t, prng, shape);
     let best = null, bestQuality = -Infinity;
     let attempts = 0;
     const maxAttempts = DIFFICULTIES[diff].maxAttempts || MAX_ATTEMPTS; // huge boards: fewer retries
@@ -858,6 +1061,21 @@
         best = { arrows, solution, report, rng, empty };
       }
       if (empty === 0 && (ok || DIFFICULTIES[diff].acceptFirstFull)) break;
+    }
+    // Odd outlines can leave a stubborn gap. Only then, try again with the
+    // rescue fill pass switched on (boards that already filled are untouched).
+    if (best && best.empty > 0 && !params.rescue) {
+      const rp = Object.assign({}, params, { rescue: true });
+      for (let attempt = 0; attempt < maxAttempts && best.empty > 0; attempt++) {
+        attempts++;
+        const rng = new RNG(seed + '|rescue|' + attempt);
+        const { arrows, solution, empty } = buildBoard(rp, rng);
+        if (arrows.length < 4 || empty > 0) continue;
+        const puzzle = { cols: params.cols, rows: params.rows, arrows, solution };
+        const report = analyze(puzzle);
+        if (!report.solvable || !verifySolution(puzzle, solution)) continue;
+        best = { arrows, solution, report, rng, empty };
+      }
     }
     if (!best) throw new Error('Generator could not build a solvable board for seed ' + seed);
     assignColors(best.arrows, params.cols, params.rows, new RNG(seed + '|colors'), PALETTE_SIZE);
@@ -895,12 +1113,14 @@
     { diff: 'impossible', from: 141, to: 150 },
   ];
   const CAMPAIGN_LENGTH = 150;
-  const GENERATOR_VERSION = 'v3'; // v2: fully covered boards · v3: mixed lengths, winding arrows
+  const GENERATOR_VERSION = 'v5'; // v2: fully covered boards · v3: mixed lengths, winding arrows · v4: random board outlines · v5: Perlin outlines
+  // Seeds still use 'v3', so plain rectangular boards are exactly what they were.
+  const SEED_VERSION = 'v3';
 
   function campaignLevelInfo(level) {
     const tier = CAMPAIGN_TIERS.find((tr) => level >= tr.from && level <= tr.to) || CAMPAIGN_TIERS[CAMPAIGN_TIERS.length - 1];
     const t = tier.to === tier.from ? 1 : (level - tier.from) / (tier.to - tier.from);
-    return { level, diff: tier.diff, t, seed: 'campaign|' + GENERATOR_VERSION + '|' + level };
+    return { level, diff: tier.diff, t, seed: 'campaign|' + SEED_VERSION + '|' + level };
   }
   function campaignPuzzle(level) {
     const info = campaignLevelInfo(level);
@@ -913,14 +1133,14 @@
     const [y, m, d] = dateKey.split('-').map(Number);
     const weekday = new Date(y, m - 1, d, 12).getDay();
     const diff = DAILY_BY_WEEKDAY[weekday];
-    const seed = 'daily|' + GENERATOR_VERSION + '|' + dateKey;
+    const seed = 'daily|' + SEED_VERSION + '|' + dateKey;
     const t = 0.3 + new RNG(seed + '|t').float() * 0.55;
     return { dateKey, diff, t, seed };
   }
   function dailyPuzzle(dateKey) { return generate(dailyInfo(dateKey)); }
 
   function zenPuzzle(seed, diff) {
-    return generate({ seed: 'zen|' + GENERATOR_VERSION + '|' + seed, diff, t: null });
+    return generate({ seed: 'zen|' + SEED_VERSION + '|' + seed, diff, t: null });
   }
 
   const api = {
