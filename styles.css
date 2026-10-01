@@ -1041,3 +1041,17 @@ kbd {
 .style-btn.is-locked { opacity: 0.55; cursor: default; color: var(--muted); }
 .style-btn .coin { width: 16px; height: 16px; }
 @media (max-width: 360px) { .style-grid { grid-template-columns: 1fr 1fr; gap: 8px; } }
+
+/* Arrow thickness setting (body.aw-thin / body.aw-thick). Normal = the defaults above. */
+.style-prev { --aw: 0.17; }
+.aw-thin .board, .aw-thin .style-prev { --aw: 0.13; }
+.aw-thin .board.is-dense { --aw: 0.17; }
+.aw-thick .board, .aw-thick .style-prev { --aw: 0.25; }
+.aw-thick .board.is-dense { --aw: 0.29; }
+.hc.aw-thin .board { --aw: 0.19; }
+.hc.aw-thin .board.is-dense { --aw: 0.22; }
+.hc.aw-thick .board { --aw: 0.29; }
+.hc.aw-thick .board.is-dense { --aw: 0.32; }
+.setting:has(+ .thick-preview) { border-bottom: 0; padding-bottom: 8px; }
+.thick-preview { padding: 0 18px 16px; border-bottom: 1px solid var(--line); }
+.thick-preview .style-prev { width: 100%; max-width: 240px; }

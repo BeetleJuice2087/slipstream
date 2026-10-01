@@ -62,7 +62,7 @@
   function defaultSave() {
     return {
       v: 1,
-      settings: { sound: true, motion: 'auto', speed: 'normal', highContrast: false, preview: true, dev: false },
+      settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', highContrast: false, preview: true, dev: false },
       campaign: { unlocked: 1, levels: {} },
       daily: { history: {}, longestStreak: 0 },
       zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [] },
@@ -134,6 +134,7 @@
     if (typeof HeroStream !== 'undefined' && HeroStream.svg && currentScreen === 'home') HeroStream.start();
     const st = Save.data.settings;
     document.body.classList.toggle('hc', !!st.highContrast);
+    for (const k in THICKNESS) document.body.classList.toggle('aw-' + k, (st.thickness || 'normal') === k);
     document.body.classList.toggle('reduce-motion', reducedMotion());
     $('#btn-debug').hidden = !st.dev;
     if (!st.dev) $('#debug-panel').hidden = true;
@@ -424,7 +425,10 @@
 
   const TIP = 0.36;      // how far the arrowhead tip reaches past the head cell centre
   const HEAD_BACK = 0.1; // where the arrowhead base sits behind the head cell centre
-  const HEAD_HALF = 0.29;
+  /* Arrow thickness (Settings). The stroke width lives in CSS (--aw);
+     the arrowhead grows a little with it so heads stay in proportion. */
+  const THICKNESS = { thin: 0.9, normal: 1, thick: 1.14 };
+  const headHalf = () => 0.29 * (THICKNESS[Save.data.settings.thickness] || 1);
 
   class BoardView {
     constructor(svg) {
@@ -538,7 +542,8 @@
       const bodyD = BoardView.pathD(this.windowPts(geo, off, off + geo.len - HEAD_BACK));
       const tip = this.pointAt(geo, off + geo.len + TIP);
       const base = this.pointAt(geo, off + geo.len - HEAD_BACK);
-      const px = -E.DY[dir] * HEAD_HALF, py = E.DX[dir] * HEAD_HALF;
+      const hh = headHalf();
+      const px = -E.DY[dir] * hh, py = E.DX[dir] * hh;
       const headD = `M${tip[0].toFixed(3)} ${tip[1].toFixed(3)}L${(base[0] + px).toFixed(3)} ${(base[1] + py).toFixed(3)}L${(base[0] - px).toFixed(3)} ${(base[1] - py).toFixed(3)}Z`;
       node.body.setAttribute('d', bodyD);
       node.casing.setAttribute('d', bodyD);
@@ -1519,10 +1524,10 @@
     const [x1, y1] = pts[pts.length - 2], [x2, y2] = pts[pts.length - 1];
     const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
     const tip = [x2 + dx * TIP, y2 + dy * TIP], base = [x2 - dx * HEAD_BACK, y2 - dy * HEAD_BACK];
-    const px = -dy * HEAD_HALF, py = dx * HEAD_HALF;
+    const px = -dy * headHalf(), py = dx * headHalf();
     const head = `M${tip[0]} ${tip[1]}L${base[0] + px} ${base[1] + py}L${base[0] - px} ${base[1] - py}Z`;
     const body = BoardView.pathD(pts.slice(0, -1).concat([base]));
-    return `<g ${extra || ''}><path d="${body}" fill="none" stroke="var(--a${color})" stroke-width="0.17" stroke-linecap="round" stroke-linejoin="round"/>` +
+    return `<g ${extra || ''}><path d="${body}" fill="none" stroke="var(--a${color})" style="stroke-width:var(--aw)" stroke-linecap="round" stroke-linejoin="round"/>` +
       `<path d="${head}" fill="var(--a${color})" stroke="var(--a${color})" stroke-width="0.06" stroke-linejoin="round"/></g>`;
   }
   function previewBoard(cols, rows, inner, arrows, board) {
@@ -1873,6 +1878,8 @@
     $('#set-sound').checked = !!st.sound;
     $('#set-motion').value = st.motion;
     $('#set-speed').value = ESCAPE_SPEEDS[st.speed] ? st.speed : 'normal';
+    $('#set-thick').value = THICKNESS[st.thickness] ? st.thickness : 'normal';
+    renderThickPreview();
     $('#set-contrast').checked = !!st.highContrast;
     $('#set-preview').checked = !!st.preview;
     $('#set-dev').checked = !!st.dev;
@@ -1881,6 +1888,17 @@
   $('#set-sound').addEventListener('change', (e) => { Save.data.settings.sound = e.target.checked; Save.soon(); if (e.target.checked) Sound.play('hint'); });
   $('#set-motion').addEventListener('change', (e) => { Save.data.settings.motion = e.target.value; applySettings(); Save.soon(); });
   $('#set-speed').addEventListener('change', (e) => { Save.data.settings.speed = e.target.value; Save.soon(); });
+  function renderThickPreview() {
+    const box = $('#thick-preview');
+    box.textContent = '';
+    box.append(previewBoard(5, 3, PREVIEW_ARROWS()));
+  }
+  $('#set-thick').addEventListener('change', (e) => {
+    Save.data.settings.thickness = e.target.value;
+    applySettings();
+    renderThickPreview();
+    Save.soon();
+  });
   $('#set-contrast').addEventListener('change', (e) => { Save.data.settings.highContrast = e.target.checked; applySettings(); Save.soon(); });
   $('#set-preview').addEventListener('change', (e) => { Save.data.settings.preview = e.target.checked; Save.soon(); });
   $('#set-dev').addEventListener('change', (e) => { Save.data.settings.dev = e.target.checked; applySettings(); Save.soon(); });

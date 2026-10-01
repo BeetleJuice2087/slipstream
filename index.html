@@ -225,9 +225,18 @@
       </header>
       <div class="settings-list">
         <label class="setting">
-          <span class="setting-text"><span class="setting-name">Sound</span><span class="setting-sub">Soft synthesized effects</span></span>
+          <span class="setting-text"><span class="setting-name">Sound</span><span class="setting-sub">Arrow and level-complete sounds</span></span>
           <input type="checkbox" class="switch" id="set-sound">
         </label>
+        <label class="setting">
+          <span class="setting-text"><span class="setting-name">Arrow thickness</span><span class="setting-sub">Thicker arrows are easier to see and tap</span></span>
+          <select id="set-thick" class="select">
+            <option value="thin">Thin</option>
+            <option value="normal">Normal</option>
+            <option value="thick">Thick</option>
+          </select>
+        </label>
+        <div class="thick-preview" id="thick-preview" aria-hidden="true"></div>
         <label class="setting">
           <span class="setting-text"><span class="setting-name">Arrow speed</span><span class="setting-sub">How quickly arrows fly off the board</span></span>
           <select id="set-speed" class="select">
