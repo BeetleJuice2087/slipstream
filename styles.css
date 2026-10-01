@@ -1084,3 +1084,49 @@ kbd {
   fill: color-mix(in oklab, var(--c) 40%, #fff); stroke: color-mix(in oklab, var(--c) 40%, #fff);
   fill: oklch(from var(--c) max(0.6, calc(l - 0.2)) calc(c + 0.09) h); stroke: oklch(from var(--c) max(0.6, calc(l - 0.2)) calc(c + 0.09) h);
 }
+
+/* Color-blind friendly colors (Settings). Overrides the equipped theme. Tuned so
+   every pair stays distinct under simulated deuteranopia, protanopia and
+   tritanopia as well as normal vision. Doubled class beats any .th-* theme. */
+.skin.cvd.cvd { --d0: #f48c00; --d1: #71e1ff; --d2: #00c48e; --d3: #b7e549; --d4: #007df4; --d5: #f02f3c; --d6: #a668aa; --d7: #faf8d2;
+  --l0: #918844; --l1: #0092fe; --l2: #00726b; --l3: #e9a200; --l4: #2d407f; --l5: #b30011; --l6: #cf53bc; --l7: #191811; }
+.style-note { margin: -4px 0 12px; padding: 10px 12px; border-radius: var(--r-sm); background: var(--surface-2); color: var(--muted); font-size: 0.88rem; }
+
+/* Milestones */
+.trophy { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.milestone {
+  display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 10px 12px;
+  border-radius: var(--r-sm); border: 1.5px solid var(--gold);
+  background: color-mix(in srgb, var(--gold) 14%, var(--surface));
+  color: var(--gold); text-align: left;
+  animation: levelPop 0.5s cubic-bezier(.2,1.6,.4,1) 0.8s both;
+}
+.milestone > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; color: var(--text); }
+.milestone strong { font-size: 1rem; }
+.milestone small { color: var(--muted); font-size: 0.8rem; }
+.reduce-motion .milestone { animation: none; }
+.ms-list { display: flex; flex-direction: column; gap: 8px; }
+.ms-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--r-md); border: 1px solid var(--line); background: var(--surface); color: var(--faint); }
+.ms-item.is-done { border-color: var(--gold); color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, var(--surface)); }
+.ms-text { flex: 1; display: flex; flex-direction: column; min-width: 0; color: var(--text); }
+.ms-item:not(.is-done) .ms-text { color: var(--muted); }
+.ms-text small { color: var(--muted); font-size: 0.8rem; }
+.ms-state { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
+.ms-item.is-done .ms-state { color: var(--gold); }
+.ms-coins { display: inline-flex; align-items: center; gap: 4px; font-weight: 800; color: var(--gold); white-space: nowrap; }
+.ms-coins .coin { width: 16px; height: 16px; }
+
+/* Achievements */
+.ach-btn { justify-content: flex-start; padding: 0 18px; color: var(--text); }
+.ach-btn svg { stroke: var(--gold); }
+.ach-count { margin-left: auto; font-weight: 800; color: var(--gold); font-variant-numeric: tabular-nums; }
+.ach-bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; margin-bottom: 14px; }
+.ach-bar span { display: block; height: 100%; width: 0; background: var(--gold); border-radius: inherit; }
+.ms-prog { display: block; height: 5px; margin-top: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; max-width: 220px; }
+.ms-prog span { display: block; height: 100%; background: var(--accent); border-radius: inherit; }
+.ms-when { color: var(--gold) !important; opacity: 0.9; }
+.ms-state { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.ms-state small { display: inline-flex; align-items: center; gap: 3px; font-size: 0.78rem; color: var(--gold); }
+.ms-state small .coin { width: 13px; height: 13px; }
+.ms-item:not(.is-done) .ms-state small { opacity: 0.75; }
+.ach-kicker { font-size: 0.68rem !important; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold) !important; }

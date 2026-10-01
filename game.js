@@ -62,7 +62,7 @@
   function defaultSave() {
     return {
       v: 1,
-      settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', highContrast: false, preview: true, dev: false },
+      settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', colorblind: false, highContrast: false, preview: true, dev: false },
       campaign: { unlocked: 1, levels: {} },
       daily: { history: {}, longestStreak: 0 },
       zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [] },
@@ -83,6 +83,7 @@
         owned: { arrows: ['classic'], board: ['default'], trail: ['classic'] },
         equip: { arrows: 'classic', board: 'default', trail: 'classic' },
       },
+      milestones: {},   // id -> ISO date earned
     };
   }
   function isPlain(o) { return o && typeof o === 'object' && !Array.isArray(o); }
@@ -396,15 +397,16 @@
   /** Put the equipped (or given) arrow theme and board on an SVG board. */
   const OUTLINED_THEMES = ['pastel', 'sunset', 'ocean'];
   const lightQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
-  function applySkin(svg, arrows, board) {
+  function applySkin(svg, arrows, board, ignoreCvd) {
     const eq = Save.data.progress.equip;
     const b = styleItem('board', board || eq.board);
     const th = styleItem('arrows', arrows || eq.arrows).id;
     const lightBoard = b.tone === 'light' || (b.tone === 'auto' && !!(lightQuery && lightQuery.matches));
     const mode = Save.data.settings.outline || 'auto';
-    const outline = mode === 'on' || (mode === 'auto' && OUTLINED_THEMES.includes(th) && lightBoard);
-    svg.setAttribute('class', svg.getAttribute('class').replace(/\s*\b(skin|th-\S+|bg-\S+|tone-\S+|outline-on|on-dark)\b/g, '').trim() +
-      ` skin th-${th} bg-${b.id} tone-${b.tone}` + (outline ? ' outline-on' : '') + (lightBoard ? '' : ' on-dark'));
+    const cvd = !!Save.data.settings.colorblind && !ignoreCvd;
+    const outline = mode === 'on' || (mode === 'auto' && (OUTLINED_THEMES.includes(th) || cvd) && lightBoard);
+    svg.setAttribute('class', svg.getAttribute('class').replace(/\s*\b(skin|th-\S+|bg-\S+|tone-\S+|outline-on|on-dark|cvd)\b/g, '').trim() +
+      ` skin th-${th} bg-${b.id} tone-${b.tone}` + (outline ? ' outline-on' : '') + (lightBoard ? '' : ' on-dark') + (cvd ? ' cvd' : ''));
   }
   if (lightQuery && lightQuery.addEventListener) lightQuery.addEventListener('change', () => {
     for (const el of document.querySelectorAll('.skin')) if (el.id) applySkin(el);
@@ -1405,6 +1407,46 @@
     return grant(xp, coins);
   }
 
+  /* ======================================================================
+     ACHIEVEMENTS (stored as milestones) — one-time goals with a coin bonus. Each has a progress
+     function returning [done, goal]; earned ones are stored by id.
+     ====================================================================== */
+  const TIER_BONUS = { easy: 50, medium: 75, hard: 100, expert: 150, nightmare: 200, insane: 250, impossible: 400 };
+  const tierDone = (tr) => { const lv = Save.data.campaign.levels; let n = 0; for (let L = tr.from; L <= tr.to; L++) if (lv[L] && lv[L].completed) n++; return n; };
+  const zenTotal = () => Object.values(Save.data.zen.boards).reduce((a, b) => a + b, 0);
+  const MILESTONES = [
+    ...E.CAMPAIGN_TIERS.map((tr) => ({
+      id: 'tier-' + tr.diff, name: `${diffLabel(tr.diff)} complete`, desc: `Clear all ${tr.to - tr.from + 1} ${diffLabel(tr.diff)} levels`,
+      coins: TIER_BONUS[tr.diff] || 100, progress: () => [tierDone(tr), tr.to - tr.from + 1],
+    })),
+    { id: 'campaign-all', name: 'Campaign champion', desc: `Clear all ${E.CAMPAIGN_LENGTH} campaign levels`, coins: 500,
+      progress: () => [E.CAMPAIGN_TIERS.reduce((a, tr) => a + tierDone(tr), 0), E.CAMPAIGN_LENGTH] },
+    { id: 'streak-7', name: 'Week streak', desc: 'Solve the Daily Puzzle 7 days in a row', coins: 50,
+      progress: () => [Math.min(7, Math.max(Save.data.daily.longestStreak || 0, dailyStreaks().longest)), 7] },
+    { id: 'streak-30', name: 'Month streak', desc: 'Solve the Daily Puzzle 30 days in a row', coins: 150,
+      progress: () => [Math.min(30, Math.max(Save.data.daily.longestStreak || 0, dailyStreaks().longest)), 30] },
+    { id: 'perfect-10', name: 'Flawless ten', desc: '10 perfect clears in a row', coins: 75,
+      progress: () => [Math.min(10, Save.data.stats.bestPerfectStreak || 0), 10] },
+    { id: 'zen-100', name: 'Zen master', desc: 'Clear 100 Zen boards', coins: 75, progress: () => [Math.min(100, zenTotal()), 100] },
+    { id: 'level-25', name: 'Level 25', desc: 'Reach player level 25', coins: 100,
+      progress: () => [Math.min(25, levelInfo(Save.data.progress.xp).level), 25] },
+  ];
+  /** Award every milestone that is now complete but not yet recorded. */
+  function checkMilestones() {
+    const got = Save.data.milestones, earned = [];
+    for (const m of MILESTONES) {
+      if (got[m.id]) continue;
+      const [n, goal] = m.progress();
+      if (n >= goal) {
+        got[m.id] = new Date().toISOString();
+        Save.data.progress.coins += m.coins;
+        Save.data.progress.coinsEarned += m.coins;
+        earned.push(m);
+      }
+    }
+    return earned;
+  }
+
   function recordFinish(sess, puzzle) {
     const res = { perfect: false, counted: counted(sess), time: sess.elapsed, notes: [], stars: starsFor(sess) };
     if (!res.counted) {
@@ -1481,6 +1523,7 @@
     if (perfect && st.perfectStreak > 1) res.notes.push(`${st.perfectStreak} perfect clears in a row`);
     const rw = rewardFor(sess.mode, d, res.stars, !!res.replay);
     res.reward = grant(rw.xp, rw.coins);
+    res.milestones = checkMilestones();
     Save.data.active = null;
     return res;
   }
@@ -1519,6 +1562,8 @@
   renderers.home = function () {
     HeroStream.start();
     renderPlayer();
+    const achN = MILESTONES.filter((m) => Save.data.milestones[m.id]).length;
+    $('#home-ach-count').textContent = `${achN} / ${MILESTONES.length}`;
     const act = Save.data.active;
     const cont = $('#home-continue');
     if (act && !act.done && act.mode !== 'debug') {
@@ -1566,7 +1611,7 @@
     return `<g class="arrow" style="--c:var(--a${color})" ${extra || ''}><path class="casing" d="${body}"/><path class="head-casing" d="${head}"/><path d="${body}" fill="none" stroke="var(--a${color})" style="stroke-width:var(--aw)" stroke-linecap="round" stroke-linejoin="round"/>` +
       `<path d="${head}" fill="var(--a${color})" stroke="var(--a${color})" stroke-width="0.06" stroke-linejoin="round"/></g>`;
   }
-  function previewBoard(cols, rows, inner, arrows, board) {
+  function previewBoard(cols, rows, inner, arrows, board, ignoreCvd) {
     let dots = '';
     for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) dots += `<circle cx="${x + 0.5}" cy="${y + 0.5}" r="0.06"/>`;
     const svg = `<svg class="style-prev" viewBox="-0.3 -0.3 ${cols + 0.6} ${rows + 0.6}" aria-hidden="true">` +
@@ -1574,7 +1619,7 @@
     const wrap = document.createElement('div');
     wrap.innerHTML = svg;
     const el = wrap.firstChild;
-    applySkin(el, arrows, board);
+    applySkin(el, arrows, board, ignoreCvd);
     return el;
   }
   const PREVIEW_ARROWS = () =>
@@ -1640,7 +1685,7 @@
       for (const it of STYLE[kind]) {
         const owned = pr.owned[kind].includes(it.id);
         const on = pr.equip[kind] === it.id;
-        const prev = kind === 'arrows' ? previewBoard(5, 3, PREVIEW_ARROWS(), it.id)
+        const prev = kind === 'arrows' ? previewBoard(5, 3, PREVIEW_ARROWS(), it.id, null, true)
           : kind === 'board' ? previewBoard(5, 3, PREVIEW_ARROWS(), null, it.id)
           : trailPreview(it.id);
         let label, cls = 'style-btn', disabled = false;
@@ -1657,8 +1702,35 @@
           h('div', { class: 'style-meta' }, h('strong', { text: it.name }), it.desc ? h('span', { text: it.desc }) : null), btn);
         grid.append(card);
       }
-      wrap.append(h('section', { class: 'style-section' }, h('h3', { text: title }), grid));
+      const note = kind === 'arrows' && Save.data.settings.colorblind
+        ? h('p', { class: 'style-note', text: 'Color-blind friendly colors are on in Settings, so puzzles use those instead of a theme. Turn them off to use these.' }) : null;
+      wrap.append(h('section', { class: 'style-section' }, h('h3', { text: title }), note, grid));
     }
+  };
+
+  /* ---------------- Achievements ---------------- */
+  renderers.achievements = function () {
+    const got = Save.data.milestones;
+    const list = $('#ach-list');
+    list.textContent = '';
+    // Earned ones first (newest first), then the rest in their natural order.
+    const earned = MILESTONES.filter((m) => got[m.id]).sort((a, b) => (got[b.id] > got[a.id] ? 1 : -1));
+    const open = MILESTONES.filter((m) => !got[m.id]);
+    for (const m of earned.concat(open)) {
+      const [n, goal] = m.progress();
+      const done = !!got[m.id];
+      const item = h('div', { class: 'ms-item' + (done ? ' is-done' : '') },
+        h('span', { class: 'ms-icon', html: TROPHY_SVG }),
+        h('span', { class: 'ms-text' }, h('strong', { text: m.name }), h('small', { text: m.desc }),
+          done ? h('small', { class: 'ms-when', text: 'Earned ' + new Date(got[m.id]).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) })
+            : h('span', { class: 'ms-prog' }, h('span', { style: `width:${pct(Math.min(n, goal), goal)}%` }))),
+        h('span', { class: 'ms-state' }, done ? '✓ Earned' : `${fmtNum(Math.min(n, goal))} / ${fmtNum(goal)}`,
+          h('small', { html: `${COIN_SVG}+${m.coins}` })));
+      list.append(item);
+    }
+    const k = earned.length;
+    $('#ach-count').textContent = `${k} / ${MILESTONES.length}`;
+    $('#ach-bar').style.width = `${pct(k, MILESTONES.length)}%`;
   };
 
   /* ---------------- Campaign ---------------- */
@@ -1842,6 +1914,8 @@
 
     if (!st.played) body.append(h('p', { class: 'empty-note', text: 'Play a board and your numbers will start filling in here.' }));
 
+
+
     body.append(section('General', h('div', { class: 'stat-rows' },
       row('Puzzles played', fmtNum(st.played)),
       row('Puzzles completed', fmtNum(st.completed)),
@@ -1908,6 +1982,7 @@
       row('Longest perfect streak', fmtNum(st.bestPerfectStreak)),
       row('Current perfect streak', fmtNum(st.perfectStreak)),
       row('Fewest blocked taps on Hard', st.fewestBlockedHard == null ? '—' : fmtNum(st.fewestBlockedHard)))));
+
   };
 
   /* ---------------- Settings ---------------- */
@@ -1920,6 +1995,7 @@
     $('#set-speed').value = ESCAPE_SPEEDS[st.speed] ? st.speed : 'normal';
     $('#set-thick').value = THICKNESS[st.thickness] ? st.thickness : 'normal';
     $('#set-outline').value = ['auto', 'on', 'off'].includes(st.outline) ? st.outline : 'auto';
+    $('#set-cvd').checked = !!st.colorblind;
     renderThickPreview();
     $('#set-contrast').checked = !!st.highContrast;
     $('#set-preview').checked = !!st.preview;
@@ -1934,6 +2010,11 @@
     box.textContent = '';
     box.append(previewBoard(5, 3, PREVIEW_ARROWS()));
   }
+  $('#set-cvd').addEventListener('change', (e) => {
+    Save.data.settings.colorblind = e.target.checked;
+    renderThickPreview();
+    Save.soon();
+  });
   $('#set-outline').addEventListener('change', (e) => {
     Save.data.settings.outline = e.target.value;
     renderThickPreview();
@@ -2045,7 +2126,7 @@
     }
     if (usesHearts(sess.mode) && res.counted && sess.hearts < MAX_HEARTS) res.notes.push(`${sess.hearts} of ${MAX_HEARTS} hearts left`);
     $('#complete-note').textContent = res.notes.join(' · ');
-    showReward(res.reward);
+    showReward(res.reward, res.milestones);
     const stats = $('#complete-stats');
     stats.textContent = '';
     [[fmtTime(sess.elapsed), 'time'], [puzzle.arrows.length, 'arrows'], [sess.blocked, 'blocked'], [sess.hints, 'hints']]
@@ -2054,7 +2135,7 @@
     const burst = $('.burst', ov);
     burst.textContent = '';
     if (!reducedMotion()) {
-      const n = res.perfect ? 20 : 12;
+      const n = (res.milestones && res.milestones.length) ? 28 : res.perfect ? 20 : 12;
       for (let i = 0; i < n; i++) {
         const c = res.perfect && i % 2 === 0 ? 'var(--gold)' : `var(--a${i % 8})`;
         burst.append(h('i', { style: `--c:${c};--r:${(360 / n) * i}deg;animation-delay:${(i % 3) * 50}ms` }));
@@ -2100,18 +2181,20 @@
     announce(`${res.perfect ? 'Perfect clear' : 'Board cleared'} in ${fmtTime(sess.elapsed)}. ${res.notes.join('. ')}`);
   }
 
-  function showReward(rw) {
+  const TROPHY_SVG = '<svg class="trophy" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4v3h-4z"/></svg>';
+  function showReward(rw, ms) {
     const box = $('#complete-reward');
     box.textContent = '';
     box.hidden = !rw;
     if (!rw) return;
+    const msHtml = (ms || []).map((m) => `<div class="milestone">${TROPHY_SVG}<span><small class="ach-kicker">Achievement unlocked</small><strong>${m.name}!</strong><small>${m.desc}</small></span><span class="ms-coins">${COIN_SVG}+${m.coins}</span></div>`).join('');
     const a = rw.after, b = rw.before;
     const from = rw.levelUp ? 0 : pct(b.into, b.need);
     box.innerHTML =
       `<div class="reward-row"><span class="reward-xp">+${fmtNum(rw.xp)} XP</span><span class="coin-pill">${COIN_SVG}<b>+${fmtNum(rw.coins + rw.bonus)}</b></span></div>` +
       `<div class="reward-level"><span class="lvl-badge small"><small>Level</small><b>${a.level}</b></span>` +
       `<span class="xp-bar"><span style="width:${from}%"></span></span><span class="reward-need">${fmtNum(a.into)} / ${fmtNum(a.need)}</span></div>` +
-      (rw.levelUp ? `<p class="levelup">Level up! You reached Level ${a.level}. +${fmtNum(rw.bonus)} bonus coins</p>` : '');
+      (rw.levelUp ? `<p class="levelup">Level up! You reached Level ${a.level}. +${fmtNum(rw.bonus)} bonus coins</p>` : '') + msHtml;
     const bar = $('.xp-bar span', box);
     requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = `${pct(a.into, a.need)}%`; }));
   }
@@ -2155,6 +2238,7 @@
       const st = Save.data.settings, pr = Save.data.progress;
       $('#q-sound').checked = !!st.sound;
       $('#q-preview').checked = !!st.preview;
+      $('#q-cvd').checked = !!st.colorblind;
       $('#q-thick').value = THICKNESS[st.thickness] ? st.thickness : 'normal';
       $('#q-outline').value = ['auto', 'on', 'off'].includes(st.outline) ? st.outline : 'auto';
       $('#q-speed').value = ESCAPE_SPEEDS[st.speed] ? st.speed : 'normal';
@@ -2184,6 +2268,7 @@
   $('#q-preview').addEventListener('change', (e) => { Save.data.settings.preview = e.target.checked; Save.soon(); });
   $('#q-thick').addEventListener('change', (e) => { Save.data.settings.thickness = e.target.value; Quick.refreshBoard(); });
   $('#q-outline').addEventListener('change', (e) => { Save.data.settings.outline = e.target.value; Quick.refreshBoard(); });
+  $('#q-cvd').addEventListener('change', (e) => { Save.data.settings.colorblind = e.target.checked; Quick.refreshBoard(); });
   $('#q-speed').addEventListener('change', (e) => { Save.data.settings.speed = e.target.value; Save.soon(); });
   $('#q-arrows').addEventListener('change', (e) => { Save.data.progress.equip.arrows = e.target.value; Quick.refreshBoard(); });
   $('#q-board').addEventListener('change', (e) => { Save.data.progress.equip.board = e.target.value; Quick.refreshBoard(); });
@@ -2524,6 +2609,7 @@
     Save.data.seenHowTo = true;
     migrateStars();
     migrateProgress();
+    checkMilestones();
     Save.write();
     puzzleCache.clear();
     calMonth = null;
@@ -2726,7 +2812,8 @@
     if (/debug/.test(location.hash)) Save.data.settings.dev = true;
     migrateStars();
     const caughtUp = migrateProgress();
-    if (caughtUp) Save.write();
+    const bootMilestones = checkMilestones();
+    if (caughtUp || bootMilestones.length) Save.write();
     if (Save.data.settings.sound) Sound.preload();
     HeroStream.init();
     Game.view = new BoardView($('#board'));
@@ -2742,6 +2829,10 @@
     else showScreen(Save.data.route === 'game' ? 'home' : Save.data.route || 'home');
     if (!Save.ok) setTimeout(() => toast('This browser is blocking storage, so progress will not be saved.'), 600);
     else if (caughtUp) setTimeout(() => toast(`New: levels and coins! You start at Level ${caughtUp.after.level}.`, 5000), 700);
+    if (Save.ok && bootMilestones.length) {
+      const coins = bootMilestones.reduce((a, m) => a + m.coins, 0);
+      setTimeout(() => toast(`🏆 ${bootMilestones.length === 1 ? 'Achievement' : bootMilestones.length + ' achievements'} unlocked: ${bootMilestones.map((m) => m.name).join(', ')} · +${coins} coins`, 6000), caughtUp ? 5900 : 700);
+    }
   }
   boot();
 

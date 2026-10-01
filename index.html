@@ -75,6 +75,9 @@
       </nav>
 
       <div class="home-row">
+        <button class="pill-btn wide ach-btn" type="button" data-go="achievements">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7M10 17h4v3h-4z" /></svg>Achievements<span class="ach-count" id="home-ach-count">0 / 13</span>
+        </button>
         <button class="pill-btn" type="button" data-go="howto">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M9.6 9.3a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.9v.3M12 17.2v.1" /></svg>How to play
         </button>
@@ -205,6 +208,20 @@
     </div>
   </section>
 
+  <!-- ============================ ACHIEVEMENTS ============================ -->
+  <section class="screen screen-menu" id="screen-achievements" data-screen="achievements" hidden>
+    <div class="menu-col">
+      <header class="screen-head">
+        <button class="icon-btn" type="button" data-back aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+        <h2>Achievements</h2>
+        <span class="head-meta" id="ach-count">0 / 13</span>
+      </header>
+      <p class="screen-lede">One-time goals. Each one pays a coin bonus the moment you earn it.</p>
+      <div class="ach-bar" aria-hidden="true"><span id="ach-bar"></span></div>
+      <div class="ms-list" id="ach-list"></div>
+    </div>
+  </section>
+
   <!-- ============================ STATS ============================ -->
   <section class="screen screen-menu" id="screen-stats" data-screen="stats" hidden>
     <div class="menu-col wide">
@@ -243,6 +260,10 @@
             <option value="on">On</option>
             <option value="off">Off</option>
           </select>
+        </label>
+        <label class="setting">
+          <span class="setting-text"><span class="setting-name">Color-blind friendly colors</span><span class="setting-sub">Arrow colors that stay easy to tell apart with red-green or blue-yellow color blindness. Replaces your arrow color theme while on.</span></span>
+          <input type="checkbox" class="switch" id="set-cvd">
         </label>
         <div class="thick-preview" id="thick-preview" aria-hidden="true"></div>
         <label class="setting">
@@ -400,6 +421,7 @@
           <select id="q-outline" class="select"><option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option></select></label>
         <label class="setting"><span class="setting-text"><span class="setting-name">Arrow speed</span></span>
           <select id="q-speed" class="select"><option value="relaxed">Relaxed</option><option value="normal">Normal</option><option value="fast">Fast</option></select></label>
+        <label class="setting"><span class="setting-text"><span class="setting-name">Color-blind friendly colors</span></span><input type="checkbox" class="switch" id="q-cvd"></label>
         <label class="setting"><span class="setting-text"><span class="setting-name">Arrow colors</span></span><select id="q-arrows" class="select"></select></label>
         <label class="setting"><span class="setting-text"><span class="setting-name">Board</span></span><select id="q-board" class="select"></select></label>
         <label class="setting"><span class="setting-text"><span class="setting-name">Show path when holding</span></span><input type="checkbox" class="switch" id="q-preview"></label>
