@@ -324,6 +324,7 @@
         <span class="game-name" id="game-name">Level 1</span>
       </div>
       <span class="diff-chip" id="game-diff">Easy</span>
+      <button class="icon-btn" type="button" id="game-settings" aria-label="Settings"><svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg></button>
     </header>
     <div class="hud" aria-label="Puzzle status">
       <div class="hud-item"><span class="hud-num" id="hud-left">0</span><span class="hud-label">arrows left</span></div>
@@ -383,6 +384,29 @@
       <div class="complete-stats" id="complete-stats"></div>
       <div class="complete-reward" id="complete-reward" hidden></div>
       <div class="sheet-actions" id="complete-actions"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="quick-overlay" hidden>
+    <div class="sheet quick-sheet" role="dialog" aria-modal="true" aria-labelledby="quick-title">
+      <h2 id="quick-title">Settings</h2>
+      <p class="quick-note">The timer is paused while this is open.</p>
+      <div class="quick-list">
+        <label class="setting"><span class="setting-text"><span class="setting-name">Sound</span></span><input type="checkbox" class="switch" id="q-sound"></label>
+        <label class="setting"><span class="setting-text"><span class="setting-name">Arrow thickness</span></span>
+          <select id="q-thick" class="select"><option value="thin">Thin</option><option value="normal">Normal</option><option value="thick">Thick</option></select></label>
+        <label class="setting"><span class="setting-text"><span class="setting-name">Arrow outlines</span></span>
+          <select id="q-outline" class="select"><option value="auto">Auto</option><option value="on">On</option><option value="off">Off</option></select></label>
+        <label class="setting"><span class="setting-text"><span class="setting-name">Arrow speed</span></span>
+          <select id="q-speed" class="select"><option value="relaxed">Relaxed</option><option value="normal">Normal</option><option value="fast">Fast</option></select></label>
+        <label class="setting"><span class="setting-text"><span class="setting-name">Arrow colors</span></span><select id="q-arrows" class="select"></select></label>
+        <label class="setting"><span class="setting-text"><span class="setting-name">Board</span></span><select id="q-board" class="select"></select></label>
+        <label class="setting"><span class="setting-text"><span class="setting-name">Show path when holding</span></span><input type="checkbox" class="switch" id="q-preview"></label>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" class="ghost-btn" id="quick-all">All settings</button>
+        <button type="button" class="primary-btn" id="quick-done">Done</button>
+      </div>
     </div>
   </div>
 

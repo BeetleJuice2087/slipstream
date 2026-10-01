@@ -403,8 +403,8 @@
     const lightBoard = b.tone === 'light' || (b.tone === 'auto' && !!(lightQuery && lightQuery.matches));
     const mode = Save.data.settings.outline || 'auto';
     const outline = mode === 'on' || (mode === 'auto' && OUTLINED_THEMES.includes(th) && lightBoard);
-    svg.setAttribute('class', svg.getAttribute('class').replace(/\s*\b(skin|th-\S+|bg-\S+|tone-\S+|outline-on)\b/g, '').trim() +
-      ` skin th-${th} bg-${b.id} tone-${b.tone}` + (outline ? ' outline-on' : ''));
+    svg.setAttribute('class', svg.getAttribute('class').replace(/\s*\b(skin|th-\S+|bg-\S+|tone-\S+|outline-on|on-dark)\b/g, '').trim() +
+      ` skin th-${th} bg-${b.id} tone-${b.tone}` + (outline ? ' outline-on' : '') + (lightBoard ? '' : ' on-dark'));
   }
   if (lightQuery && lightQuery.addEventListener) lightQuery.addEventListener('change', () => {
     for (const el of document.querySelectorAll('.skin')) if (el.id) applySkin(el);
@@ -484,7 +484,7 @@
       for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (mask[y * cols + x]) cells += `M${x} ${y}h1v1h-1z`;
       this.gGrid.append(s('path', { class: 'board-edge', d: cells }), s('path', { class: 'board-bg', d: cells }));
       // All dots in a single path keeps the DOM small on big boards.
-      const r = 0.06;
+      const r = 0.07;
       let d = '';
       for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
         if (!mask[y * cols + x]) continue;
@@ -1054,7 +1054,7 @@
     loadToken: 0,
 
     inputLocked() {
-      return !this.board || !this.session || this.session.done || !$('#complete-overlay').hidden || !$('#confirm-overlay').hidden;
+      return !this.board || !this.session || this.session.done || !$('#complete-overlay').hidden || !$('#confirm-overlay').hidden || !$('#quick-overlay').hidden;
     },
 
     /** Open a board. Resumes the saved session if it matches, else starts fresh. */
@@ -2147,6 +2147,48 @@
   }
 
   /* ======================================================================
+     QUICK SETTINGS — the gear on the puzzle screen. Changes apply to the
+     board straight away; the timer and taps pause while it is open.
+     ====================================================================== */
+  const Quick = {
+    open() {
+      const st = Save.data.settings, pr = Save.data.progress;
+      $('#q-sound').checked = !!st.sound;
+      $('#q-preview').checked = !!st.preview;
+      $('#q-thick').value = THICKNESS[st.thickness] ? st.thickness : 'normal';
+      $('#q-outline').value = ['auto', 'on', 'off'].includes(st.outline) ? st.outline : 'auto';
+      $('#q-speed').value = ESCAPE_SPEEDS[st.speed] ? st.speed : 'normal';
+      for (const [kind, id] of [['arrows', '#q-arrows'], ['board', '#q-board']]) {
+        const sel = $(id);
+        sel.textContent = '';
+        for (const it of STYLE[kind]) if (pr.owned[kind].includes(it.id)) sel.append(h('option', { value: it.id, text: it.name }));
+        sel.value = pr.equip[kind];
+        sel.closest('.setting').hidden = sel.options.length < 2; // nothing to switch between yet
+      }
+      $('#quick-overlay').hidden = false;
+      $('#quick-done').focus();
+    },
+    close() { $('#quick-overlay').hidden = true; },
+    refreshBoard() {
+      applySettings();
+      if (Game.view && Game.view.svg) applySkin(Game.view.svg);
+      Save.soon();
+    },
+  };
+  $('#game-settings').addEventListener('click', () => { Sound.play('tap'); Quick.open(); });
+  $('#quick-done').addEventListener('click', () => Quick.close());
+  let settingsFromGame = false;
+  $('#quick-all').addEventListener('click', () => { Quick.close(); Save.write(); settingsFromGame = true; showScreen('settings'); });
+  $('#quick-overlay').addEventListener('click', (e) => { if (e.target.id === 'quick-overlay') Quick.close(); });
+  $('#q-sound').addEventListener('change', (e) => { Save.data.settings.sound = e.target.checked; if (e.target.checked) { Sound.ensure(); Sound.play('hint'); } Save.soon(); });
+  $('#q-preview').addEventListener('change', (e) => { Save.data.settings.preview = e.target.checked; Save.soon(); });
+  $('#q-thick').addEventListener('change', (e) => { Save.data.settings.thickness = e.target.value; Quick.refreshBoard(); });
+  $('#q-outline').addEventListener('change', (e) => { Save.data.settings.outline = e.target.value; Quick.refreshBoard(); });
+  $('#q-speed').addEventListener('change', (e) => { Save.data.settings.speed = e.target.value; Save.soon(); });
+  $('#q-arrows').addEventListener('change', (e) => { Save.data.progress.equip.arrows = e.target.value; Quick.refreshBoard(); });
+  $('#q-board').addEventListener('change', (e) => { Save.data.progress.equip.board = e.target.value; Quick.refreshBoard(); });
+
+  /* ======================================================================
      DEBUG / DEVELOPER TOOLS (hidden: Settings → tap the version line
      five times → enable Developer tools; or open with #debug)
      ====================================================================== */
@@ -2617,7 +2659,14 @@
      WIRING & BOOT
      ====================================================================== */
   $$('[data-go]').forEach((b) => b.addEventListener('click', () => { Sound.play('tap'); showScreen(b.dataset.go); }));
-  $$('[data-back]').forEach((b) => b.addEventListener('click', () => { Sound.play('tap'); showScreen('home'); }));
+  $$('[data-back]').forEach((b) => b.addEventListener('click', () => {
+    Sound.play('tap');
+    // Settings opened from a puzzle's gear: go back to that puzzle.
+    const a = Save.data.active;
+    if (currentScreen === 'settings' && settingsFromGame && a && !a.done) { settingsFromGame = false; Game.open(a.mode, a.key, a.diff); return; }
+    settingsFromGame = false;
+    showScreen('home');
+  }));
   $('#home-continue').addEventListener('click', () => {
     const a = Save.data.active;
     if (a) { Sound.play('tap'); Game.open(a.mode, a.key, a.diff); }
@@ -2632,6 +2681,7 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input, select, textarea')) return;
+    if (!$('#quick-overlay').hidden) { if (e.key === 'Escape') Quick.close(); return; }
     if (!$('#confirm-overlay').hidden) { if (e.key === 'Escape') closeConfirm(false); return; }
     if (e.key === 'Escape') {
       if (currentScreen === 'game') {
@@ -2657,7 +2707,7 @@
     lastTick = now;
     const sess = Game.session;
     if (currentScreen !== 'game' || !sess || sess.done || !Game.board || document.hidden) return;
-    if (!$('#complete-overlay').hidden || !$('#confirm-overlay').hidden) return;
+    if (!$('#complete-overlay').hidden || !$('#confirm-overlay').hidden || !$('#quick-overlay').hidden) return;
     sess.elapsed += dt;
     if (counted(sess)) Save.data.stats.playMs += dt;
     $('#hud-time').textContent = fmtTime(sess.elapsed);
