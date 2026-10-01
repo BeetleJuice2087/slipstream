@@ -62,7 +62,7 @@
   function defaultSave() {
     return {
       v: 1,
-      settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', highContrast: false, preview: true, dev: false },
+      settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', highContrast: false, preview: true, dev: false },
       campaign: { unlocked: 1, levels: {} },
       daily: { history: {}, longestStreak: 0 },
       zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [] },
@@ -388,18 +388,27 @@
       { id: 'comet', name: 'Comet', price: 100, desc: 'A long bright tail' },
       { id: 'sparkle', name: 'Sparkle', price: 150, desc: 'Leaves glitter behind' },
       { id: 'firework', name: 'Firework', price: 200, desc: 'Big burst at the edge' },
-      { id: 'rainbow', name: 'Rainbow', price: 250, desc: 'Cycles every colour' },
+      { id: 'rainbow', name: 'Rainbow', price: 250, desc: 'A striped rainbow tail' },
     ],
   };
   const STYLE_KINDS = [['arrows', 'Arrow colors'], ['board', 'Board'], ['trail', 'Flight trail']];
   const styleItem = (kind, id) => STYLE[kind].find((it) => it.id === id) || STYLE[kind][0];
   /** Put the equipped (or given) arrow theme and board on an SVG board. */
+  const OUTLINED_THEMES = ['pastel', 'sunset', 'ocean'];
+  const lightQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
   function applySkin(svg, arrows, board) {
     const eq = Save.data.progress.equip;
     const b = styleItem('board', board || eq.board);
-    svg.setAttribute('class', svg.getAttribute('class').replace(/\s*\b(skin|th-\S+|bg-\S+|tone-\S+)\b/g, '').trim() +
-      ` skin th-${styleItem('arrows', arrows || eq.arrows).id} bg-${b.id} tone-${b.tone}`);
+    const th = styleItem('arrows', arrows || eq.arrows).id;
+    const lightBoard = b.tone === 'light' || (b.tone === 'auto' && !!(lightQuery && lightQuery.matches));
+    const mode = Save.data.settings.outline || 'auto';
+    const outline = mode === 'on' || (mode === 'auto' && OUTLINED_THEMES.includes(th) && lightBoard);
+    svg.setAttribute('class', svg.getAttribute('class').replace(/\s*\b(skin|th-\S+|bg-\S+|tone-\S+|outline-on)\b/g, '').trim() +
+      ` skin th-${th} bg-${b.id} tone-${b.tone}` + (outline ? ' outline-on' : ''));
   }
+  if (lightQuery && lightQuery.addEventListener) lightQuery.addEventListener('change', () => {
+    for (const el of document.querySelectorAll('.skin')) if (el.id) applySkin(el);
+  });
 
   /* Escape flight speeds (Settings → Arrow speed). Every speed launches
      on the tap, in step with the arrow sound, then glides off the board.
@@ -419,8 +428,9 @@
     comet:    { len: 4.5, opacity: 0.75, width: 0.95 },
     sparkle:  { len: 2, opacity: 0.3, sparkle: true },
     firework: { len: 2, opacity: 0.35, firework: true },
-    rainbow:  { len: 3.5, opacity: 0.7, width: 0.9, rainbow: true },
+    rainbow:  { len: 6, opacity: 0.95, width: 1, rainbow: true },
   };
+  const RAINBOW = [0, 1, 2, 3, 4, 6]; // palette slots: red, orange, yellow-green, teal, blue, purple
   const EXIT_GLIDE_CELLS = 2.6;   // how far past the edge an arrow travels before it's gone
 
   const TIP = 0.36;      // how far the arrowhead tip reaches past the head cell centre
@@ -467,7 +477,12 @@
 
     drawGrid() {
       const { cols, rows, mask } = this.p;
-      this.gGrid.append(s('rect', { class: 'board-bg', x: -0.3, y: -0.3, width: cols + 0.6, height: rows + 0.6, rx: 0.7 }));
+      // The board background follows the board's outline: every playable cell
+      // as a square, drawn twice with thick round-joined strokes so the shape
+      // gets a soft rounded edge and a thin border line.
+      let cells = '';
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) if (mask[y * cols + x]) cells += `M${x} ${y}h1v1h-1z`;
+      this.gGrid.append(s('path', { class: 'board-edge', d: cells }), s('path', { class: 'board-bg', d: cells }));
       // All dots in a single path keeps the DOM small on big boards.
       const r = 0.06;
       let d = '';
@@ -494,6 +509,7 @@
     createArrow(a) {
       const g = s('g', { class: 'arrow', 'data-id': a.id });
       const color = `var(--a${a.color})`;
+      g.style.setProperty('--c', color);
       const sel = s('path', { class: 'sel-ring' });
       const casing = s('path', { class: 'casing' });
       const headCasing = s('path', { class: 'head-casing' });
@@ -597,6 +613,19 @@
       let lastSpark = 0;
       node.trail.style.display = '';
       if (tr.width) node.trail.style.strokeWidth = `calc(var(--aw) * ${tr.width})`;
+      // Rainbow: the tail is split into bands, red at the arrow end through purple.
+      let bandGroup = null;
+      const bands = tr.rainbow ? RAINBOW.map((c, i) => {
+        if (!bandGroup) { bandGroup = s('g'); node.g.insertBefore(bandGroup, node.body); }
+        const b = s('path', { class: 'trail' });
+        b.style.stroke = `var(--a${c})`;
+        b.style.strokeWidth = 'var(--aw)';
+        b.style.strokeLinecap = i === RAINBOW.length - 1 ? 'round' : 'butt';
+        b.style.strokeLinejoin = 'round';
+        bandGroup.append(b);
+        return b;
+      }) : null;
+      if (bands) node.trail.style.display = 'none';
       node.g.style.pointerEvents = 'none';
       this.addAnim((now) => {
         const t = Math.min(1, (now - start) / dur);
@@ -606,7 +635,14 @@
         const trailFrom = Math.max(0, off - tr.len);
         node.trail.setAttribute('d', BoardView.pathD(this.windowPts(geo, trailFrom, off)));
         node.trail.style.opacity = String(tr.opacity * (1 - t));
-        if (tr.rainbow) node.trail.style.stroke = `var(--a${(node.a.color + Math.floor((now - start) / 70)) % 8})`;
+        if (bands) {
+          const span = Math.min(off, tr.len), w = span / bands.length;
+          bands.forEach((b, i) => {
+            const t1 = off - i * w, t0 = Math.max(0, t1 - w);
+            b.setAttribute('d', w > 0.01 ? BoardView.pathD(this.windowPts(geo, t0, t1)) : '');
+          });
+          bandGroup.style.opacity = String(tr.opacity * (1 - t * 0.3));
+        }
         if (tr.sparkle && now - lastSpark > 32 && off < fadeFrom) {
           lastSpark = now;
           this.sparkle(this.pointAt(geo, off + Math.random() * 0.6), node.a.color);
@@ -1527,7 +1563,7 @@
     const px = -dy * headHalf(), py = dx * headHalf();
     const head = `M${tip[0]} ${tip[1]}L${base[0] + px} ${base[1] + py}L${base[0] - px} ${base[1] - py}Z`;
     const body = BoardView.pathD(pts.slice(0, -1).concat([base]));
-    return `<g ${extra || ''}><path d="${body}" fill="none" stroke="var(--a${color})" style="stroke-width:var(--aw)" stroke-linecap="round" stroke-linejoin="round"/>` +
+    return `<g class="arrow" style="--c:var(--a${color})" ${extra || ''}><path class="casing" d="${body}"/><path class="head-casing" d="${head}"/><path d="${body}" fill="none" stroke="var(--a${color})" style="stroke-width:var(--aw)" stroke-linecap="round" stroke-linejoin="round"/>` +
       `<path d="${head}" fill="var(--a${color})" stroke="var(--a${color})" stroke-width="0.06" stroke-linejoin="round"/></g>`;
   }
   function previewBoard(cols, rows, inner, arrows, board) {
@@ -1553,7 +1589,11 @@
     const tail = 3.0, len = tr.len;
     let fx = '';
     if (tr.rainbow) {
-      for (let i = 0; i < 4; i++) fx += `<path d="M${tail - len + (len / 4) * i} ${y}H${tail - len + (len / 4) * (i + 1)}" stroke="var(--a${(i + 3) % 8})" stroke-width="0.15" opacity="0.75" stroke-linecap="round"/>`;
+      const L = Math.min(len, tail), n = RAINBOW.length;
+      RAINBOW.forEach((c, i) => {
+        const x1 = tail - (L / n) * i, x0 = x1 - L / n;
+        fx += `<path d="M${x0.toFixed(2)} ${y}H${x1.toFixed(2)}" stroke="var(--a${c})" style="stroke-width:var(--aw)" opacity="0.95" stroke-linecap="${i === n - 1 ? 'round' : 'butt'}"/>`;
+      });
     } else {
       fx += `<path d="M${tail - len} ${y}H${tail}" stroke="var(--a4)" stroke-width="${0.17 * (tr.width || 0.7)}" opacity="${tr.opacity}" stroke-linecap="round"/>`;
     }
@@ -1879,6 +1919,7 @@
     $('#set-motion').value = st.motion;
     $('#set-speed').value = ESCAPE_SPEEDS[st.speed] ? st.speed : 'normal';
     $('#set-thick').value = THICKNESS[st.thickness] ? st.thickness : 'normal';
+    $('#set-outline').value = ['auto', 'on', 'off'].includes(st.outline) ? st.outline : 'auto';
     renderThickPreview();
     $('#set-contrast').checked = !!st.highContrast;
     $('#set-preview').checked = !!st.preview;
@@ -1893,6 +1934,11 @@
     box.textContent = '';
     box.append(previewBoard(5, 3, PREVIEW_ARROWS()));
   }
+  $('#set-outline').addEventListener('change', (e) => {
+    Save.data.settings.outline = e.target.value;
+    renderThickPreview();
+    Save.soon();
+  });
   $('#set-thick').addEventListener('change', (e) => {
     Save.data.settings.thickness = e.target.value;
     applySettings();
@@ -2459,7 +2505,7 @@
   /* ======================================================================
      HERO STREAM — the arrows gliding past above the title.
      Three lanes; each lane has its own speed so arrows never overtake.
-     Every arrow gets a random colour, length and shape: straight, or
+     Every arrow gets a random color, length and shape: straight, or
      stepping up/down once or twice, always ending on a straight run so
      the head lines up (same proportions as the game pieces).
      ====================================================================== */
