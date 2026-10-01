@@ -659,6 +659,9 @@ kbd {
 }
 .danger-zone h3 { margin: 0 0 4px; font-size: 1rem; }
 .danger-zone p { margin: 0 0 14px; color: var(--muted); }
+.credits { display: flex; flex-direction: column; gap: 2px; }
+.credits h3 { margin: 0 0 4px; font-size: 0.78rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.credits p { margin: 0; color: var(--muted); font-size: 0.88rem; }
 .about { color: var(--faint); font-size: 0.85rem; line-height: 1.9; margin: 0; }
 .version { background: none; border: 0; color: var(--faint); padding: 0; cursor: default; font-size: inherit; text-decoration: underline dotted; }
 
