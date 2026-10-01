@@ -7,6 +7,7 @@ No build step, no server, no accounts. Works offline (fonts fall back to system 
 - `index.html` – markup for every screen
 - `styles.css` – all styling (dark and light themes, high contrast, reduced motion)
 - `engine.js` – pure puzzle logic: seeded RNG, difficulty table, generator, validator, collision
+- `sounds.js` – recorded sound effects embedded as text (source files in `sounds/`)
 - `game.js` – everything the player touches: renderer, input, modes, stats, saving, audio, settings, dev tools
 
 ## How the puzzles work
@@ -44,3 +45,10 @@ It installs only when served from an https:// address, so host the whole folder,
 To update: upload the new folder to the same Netlify site. The app fetches new files whenever it's online
 and uses its saved copy when offline.
 Progress is stored on each device, inside the installed app.
+
+## Sound credits
+- Arrow sound: "Whoosh Transitions SFX 01" by StudioKolomna, Pixabay Content License (free to use, credit optional;
+  built into the game, never offered as a standalone download).
+- Level complete: "New Level Unlocked" by Universfield, Pixabay Content License (free to use, credit optional).
+- The `sounds/` folder holds the trimmed source mp3s; the game uses the copies embedded in `sounds.js`,
+  so `sounds/` doesn't need to be uploaded.
