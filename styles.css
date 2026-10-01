@@ -727,7 +727,9 @@ kbd {
 .board:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
 .board.is-dense { --aw: 0.21; }
 .hc .board.is-dense { --aw: 0.26; }
-.board-bg { fill: var(--board); stroke: var(--line); stroke-width: 0.04; }
+.board-edge { fill: var(--line); stroke: var(--line); stroke-width: 0.68; stroke-linejoin: round; }
+.board-bg { fill: var(--board); stroke: var(--board); stroke-width: 0.6; stroke-linejoin: round; }
+.style-prev .board-bg { stroke: none; }
 .board-dot { fill: var(--dot); }
 
 .arrow .body {
@@ -936,22 +938,24 @@ kbd {
 
 /* ---------------- Style shop skins (board only) ----------------
    Each arrow theme has a dark-board and a light-board palette (--dN / --lN).
+   Tuned so every pair of colors in a theme is clearly different (OKLab
+   distance of 12 or more) and every color stands out on its boards.
    The board picks one by its tone: dark/light boards force it, the
    default board follows the app's light or dark mode. Generated table. */
-.skin { --d0: #ff8070; --d1: #ffc35c; --d2: #b9e86e; --d3: #52dcb4; --d4: #62c9ff; --d5: #9aa2ff; --d6: #d893ff; --d7: #ff86bb;
-  --l0: #e04a38; --l1: #d38400; --l2: #5a9512; --l3: #0c9774; --l4: #1383c7; --l5: #4f5be0; --l6: #9443d0; --l7: #d2367f; }
-.skin.th-pastel { --d0: #ffb4a8; --d1: #ffdf9e; --d2: #d4f0a2; --d3: #a6ecd4; --d4: #a9dcff; --d5: #c4c8ff; --d6: #e6c0ff; --d7: #ffc1da;
-  --l0: #d5705f; --l1: #b98a2a; --l2: #6f9c3a; --l3: #2f9c80; --l4: #3f8fc0; --l5: #6a72d2; --l6: #9c62c8; --l7: #cc5f94; }
-.skin.th-sunset { --d0: #ff6b5b; --d1: #ffa24c; --d2: #ffd166; --d3: #ff7eb6; --d4: #c77dff; --d5: #f25f8c; --d6: #ffb38a; --d7: #9d7bff;
-  --l0: #d94436; --l1: #d9711a; --l2: #b88a00; --l3: #d13f86; --l4: #8f3fd6; --l5: #c2265e; --l6: #c4622b; --l7: #6a48d6; }
-.skin.th-ocean { --d0: #4cc9f0; --d1: #4895ef; --d2: #56e3c4; --d3: #7ae3ff; --d4: #ffb4a2; --d5: #f7d794; --d6: #3dd6a8; --d7: #8ab4ff;
-  --l0: #0a8fbf; --l1: #2766c9; --l2: #0e9c7f; --l3: #1f86a8; --l4: #d8604a; --l5: #a8801f; --l6: #0b8a64; --l7: #4a6fd8; }
-.skin.th-forest { --d0: #8bd17c; --d1: #c9e265; --d2: #e0b25c; --d3: #d98a5f; --d4: #5fc79a; --d5: #e57a9a; --d6: #a3c55b; --d7: #7cc4e4;
-  --l0: #3f8f30; --l1: #7a9200; --l2: #b07d16; --l3: #b55b2f; --l4: #1f8a5e; --l5: #c2416b; --l6: #6a8a1c; --l7: #2e83a8; }
-.skin.th-neon { --d0: #ff3b6b; --d1: #ffe600; --d2: #7dff3a; --d3: #00ffc6; --d4: #00d0ff; --d5: #8c7dff; --d6: #e040ff; --d7: #ff3fb4;
-  --l0: #e3002f; --l1: #d98200; --l2: #2ea300; --l3: #00a383; --l4: #0088d1; --l5: #4a3cff; --l6: #b100d6; --l7: #e6007e; }
-.skin.th-jewel { --d0: #ff5577; --d1: #ffd36b; --d2: #3ee08f; --d3: #3fb6ff; --d4: #b07cff; --d5: #ff9a3c; --d6: #4fe3d8; --d7: #ff7ad9;
-  --l0: #c8143d; --l1: #b07d00; --l2: #0f9a58; --l3: #0f6fc8; --l4: #7a35d6; --l5: #cc5f00; --l6: #0a958c; --l7: #c22f9a; }
+.skin { --d0: #f86836; --d1: #ebb85d; --d2: #cff779; --d3: #48ce92; --d4: #6ccff9; --d5: #7395ff; --d6: #d578f5; --d7: #ff95b5;
+  --l0: #da1d12; --l1: #be8100; --l2: #41a100; --l3: #008673; --l4: #0c90ea; --l5: #3a44df; --l6: #980dbc; --l7: #e639a7; }
+.skin.th-pastel { --d0: #ffddfb; --d1: #a0e1a5; --d2: #f3f290; --d3: #7cd3ec; --d4: #cebaff; --d5: #ffc17e; --d6: #a1fffc; --d7: #ffa3b6;
+  --l0: #ffddfb; --l1: #a0e1a5; --l2: #f3f290; --l3: #7cd3ec; --l4: #cebaff; --l5: #ffc17e; --l6: #a1fffc; --l7: #ffa3b6; }
+.skin.th-sunset { --d0: #c34efe; --d1: #ff3ec2; --d2: #ff315a; --d3: #f57800; --d4: #dcc016; --d5: #7682f7; --d6: #ffac99; --d7: #ffefa6;
+  --l0: #71008f; --l1: #b6006d; --l2: #ff3b84; --l3: #fd7309; --l4: #f8cf52; --l5: #1f256f; --l6: #fe9abb; --l7: #b74a02; }
+.skin.th-ocean { --d0: #6d79ff; --d1: #3da8ff; --d2: #00a3b2; --d3: #79ccf4; --d4: #59f9fb; --d5: #dbffff; --d6: #00e0af; --d7: #89b79b;
+  --l0: #022f63; --l1: #10598e; --l2: #007ed0; --l3: #00a9c1; --l4: #56d0f8; --l5: #beedf4; --l6: #10817c; --l7: #6dc697; }
+.skin.th-forest { --d0: #f0d956; --d1: #84cd6b; --d2: #00a977; --d3: #00e1e0; --d4: #a59500; --d5: #dbab7f; --d6: #d46836; --d7: #f27ba2;
+  --l0: #989000; --l1: #20964b; --l2: #2c6e00; --l3: #006664; --l4: #806425; --l5: #d1742c; --l6: #952c00; --l7: #bf4d73; }
+.skin.th-neon { --d0: #ff5200; --d1: #ffae35; --d2: #fdff59; --d3: #32df15; --d4: #2bd7e8; --d5: #2196ff; --d6: #ca46ff; --d7: #ff149b;
+  --l0: #ba0031; --l1: #ff4d00; --l2: #9e7b00; --l3: #00a400; --l4: #007e9a; --l5: #3f5eff; --l6: #b32bff; --l7: #ff00b6; }
+.skin.th-jewel { --d0: #0086fc; --d1: #4ac2e7; --d2: #5ada63; --d3: #ffd300; --d4: #ff8905; --d5: #ff3259; --d6: #b478ff; --d7: #f919cc;
+  --l0: #001b84; --l1: #3382ab; --l2: #037100; --l3: #ab8800; --l4: #ff3937; --l5: #901913; --l6: #6928d2; --l7: #c6009d; }
 .skin { --a0: var(--d0); --a1: var(--d1); --a2: var(--d2); --a3: var(--d3); --a4: var(--d4); --a5: var(--d5); --a6: var(--d6); --a7: var(--d7); }
 .skin.tone-light { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .skin.tone-auto { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); } }
@@ -1055,3 +1059,10 @@ kbd {
 .setting:has(+ .thick-preview) { border-bottom: 0; padding-bottom: 8px; }
 .thick-preview { padding: 0 18px 16px; border-bottom: 1px solid var(--line); }
 .thick-preview .style-prev { width: 100%; max-width: 240px; }
+
+/* Themes matched to pale reference colors (Pastel, Sunset's saffron, Ocean's
+   light blues) get a thin outline on light boards, in a darker shade of each
+   arrow's own color, so pale arrows stay easy to see. game.js adds
+   .outline-on to the board and sets --c on every arrow. */
+.skin.outline-on .arrow .casing { display: inline; stroke: rgba(30, 30, 50, 0.45); stroke: color-mix(in oklab, var(--c) 62%, #000); stroke-width: calc(var(--aw) + 0.09); }
+.skin.outline-on .arrow .head-casing { display: inline; fill: rgba(30, 30, 50, 0.45); stroke: rgba(30, 30, 50, 0.45); fill: color-mix(in oklab, var(--c) 62%, #000); stroke: color-mix(in oklab, var(--c) 62%, #000); stroke-width: 0.1; }
