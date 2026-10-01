@@ -78,6 +78,11 @@
       seenHowTo: false,
       lastBackup: null,
       seenHeartsTip: false,
+      progress: {
+        xp: 0, coins: 0, coinsEarned: 0, migrated: false,
+        owned: { arrows: ['classic'], board: ['default'], trail: ['classic'] },
+        equip: { arrows: 'classic', board: 'default', trail: 'classic' },
+      },
     };
   }
   function isPlain(o) { return o && typeof o === 'object' && !Array.isArray(o); }
@@ -253,15 +258,25 @@
             this.tone(660, 0.14, { vol: 0.06 });
             this.tone(990, 0.2, { vol: 0.05, delay: 0.1 });
             break;
+          // Board cleared: the fanfare. A perfect clear plays it two
+          // semitones higher, so it sounds brighter than a normal clear.
           case 'complete':
-            [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.28, { type: 'triangle', vol: 0.08, delay: i * 0.08 }));
+            if (!this.sample('complete', 0.6, 1)) {
+              [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.28, { type: 'triangle', vol: 0.08, delay: i * 0.08 }));
+            }
             break;
           case 'perfect':
-            [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => this.tone(f, 0.35, { type: 'triangle', vol: 0.075, delay: i * 0.07 }));
-            [2093, 2637].forEach((f, i) => this.tone(f, 0.5, { vol: 0.03, delay: 0.45 + i * 0.1 }));
+            if (!this.sample('complete', 0.62, Math.pow(2, 2 / 12))) {
+              [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => this.tone(f, 0.35, { type: 'triangle', vol: 0.075, delay: i * 0.07 }));
+              [2093, 2637].forEach((f, i) => this.tone(f, 0.5, { vol: 0.03, delay: 0.45 + i * 0.1 }));
+            }
             break;
           case 'daily':
-            [392, 494, 587, 784].forEach((f) => this.tone(f, 0.7, { type: 'sine', vol: 0.05, delay: 0.3 }));
+            // Extra chord for a Daily clear, only with the synth sounds;
+            // the fanfare already covers it.
+            if (!(window.SLIP_SOUNDS && window.SLIP_SOUNDS.complete)) {
+              [392, 494, 587, 784].forEach((f) => this.tone(f, 0.7, { type: 'sine', vol: 0.05, delay: 0.3 }));
+            }
             break;
         }
       } catch (e) { /* audio is optional */ }
@@ -345,6 +360,46 @@
      RENDERER — SVG board. One <g> per arrow (casing, trail, body, head).
      Board units: one cell = 1 unit, cell (x, y) centre at (x+.5, y+.5).
      ====================================================================== */
+  /* ======================================================================
+     STYLE SHOP CATALOG — looks bought with coins. Palettes live in
+     styles.css (.skin.th-*, .skin.bg-*); trails are drawn in BoardView.escape.
+     ====================================================================== */
+  const STYLE = {
+    arrows: [
+      { id: 'classic', name: 'Classic', price: 0 },
+      { id: 'pastel', name: 'Pastel', price: 80 },
+      { id: 'sunset', name: 'Sunset', price: 120 },
+      { id: 'ocean', name: 'Ocean', price: 120 },
+      { id: 'forest', name: 'Forest', price: 150 },
+      { id: 'neon', name: 'Neon', price: 200 },
+      { id: 'jewel', name: 'Jewel', price: 300 },
+    ],
+    board: [
+      { id: 'default', name: 'Default', price: 0, tone: 'auto' },
+      { id: 'paper', name: 'Paper', price: 80, tone: 'light' },
+      { id: 'midnight', name: 'Midnight', price: 100, tone: 'dark' },
+      { id: 'blush', name: 'Blush', price: 120, tone: 'light' },
+      { id: 'deepsea', name: 'Deep Sea', price: 150, tone: 'dark' },
+      { id: 'pine', name: 'Pine', price: 150, tone: 'dark' },
+    ],
+    trail: [
+      { id: 'classic', name: 'Classic', price: 0, desc: 'A soft streak' },
+      { id: 'comet', name: 'Comet', price: 100, desc: 'A long bright tail' },
+      { id: 'sparkle', name: 'Sparkle', price: 150, desc: 'Leaves glitter behind' },
+      { id: 'firework', name: 'Firework', price: 200, desc: 'Big burst at the edge' },
+      { id: 'rainbow', name: 'Rainbow', price: 250, desc: 'Cycles every colour' },
+    ],
+  };
+  const STYLE_KINDS = [['arrows', 'Arrow colors'], ['board', 'Board'], ['trail', 'Flight trail']];
+  const styleItem = (kind, id) => STYLE[kind].find((it) => it.id === id) || STYLE[kind][0];
+  /** Put the equipped (or given) arrow theme and board on an SVG board. */
+  function applySkin(svg, arrows, board) {
+    const eq = Save.data.progress.equip;
+    const b = styleItem('board', board || eq.board);
+    svg.setAttribute('class', svg.getAttribute('class').replace(/\s*\b(skin|th-\S+|bg-\S+|tone-\S+)\b/g, '').trim() +
+      ` skin th-${styleItem('arrows', arrows || eq.arrows).id} bg-${b.id} tone-${b.tone}`);
+  }
+
   /* Escape flight speeds (Settings → Arrow speed). Every speed launches
      on the tap, in step with the arrow sound, then glides off the board.
        duration = baseMs + perCellMs × distance, kept between minMs and maxMs
@@ -357,6 +412,14 @@
     relaxed: { baseMs: 420, perCellMs: 16, minMs: 560, maxMs: 950, ease: 1.35 },
   };
   const escapeSpeed = () => ESCAPE_SPEEDS[Save.data.settings.speed] || ESCAPE_SPEEDS.normal;
+  /* Flight trails (Style shop). len = cells of trail behind the tail. */
+  const TRAILS = {
+    classic:  { len: 2, opacity: 0.35 },
+    comet:    { len: 4.5, opacity: 0.75, width: 0.95 },
+    sparkle:  { len: 2, opacity: 0.3, sparkle: true },
+    firework: { len: 2, opacity: 0.35, firework: true },
+    rainbow:  { len: 3.5, opacity: 0.7, width: 0.9, rainbow: true },
+  };
   const EXIT_GLIDE_CELLS = 2.6;   // how far past the edge an arrow travels before it's gone
 
   const TIP = 0.36;      // how far the arrowhead tip reaches past the head cell centre
@@ -386,6 +449,7 @@
       for (const g of [this.gGrid, this.gUnder, this.gArrows, this.gFx, this.gLabels]) g.textContent = '';
       this.nodes.clear();
       this.selected = -1;
+      applySkin(this.svg);
       this.drawGrid();
       for (const id of board.alive) this.createArrow(puzzle.arrows[id]);
       this.fit();
@@ -524,41 +588,64 @@
       const fadeFrom = geo.len + edge;   // tail reaches the board edge here
       const start = performance.now();
       let burst = false;
+      const tr = TRAILS[Save.data.progress.equip.trail] || TRAILS.classic;
+      let lastSpark = 0;
       node.trail.style.display = '';
+      if (tr.width) node.trail.style.strokeWidth = `calc(var(--aw) * ${tr.width})`;
       node.g.style.pointerEvents = 'none';
       this.addAnim((now) => {
         const t = Math.min(1, (now - start) / dur);
         const e = 1 - Math.pow(1 - t, sp.ease); // launches on the tap, in step with the sound
         const off = total * e;
         this.shape(node, off);
-        const trailFrom = Math.max(0, off - 2);
+        const trailFrom = Math.max(0, off - tr.len);
         node.trail.setAttribute('d', BoardView.pathD(this.windowPts(geo, trailFrom, off)));
-        node.trail.style.opacity = String(0.35 * (1 - t));
+        node.trail.style.opacity = String(tr.opacity * (1 - t));
+        if (tr.rainbow) node.trail.style.stroke = `var(--a${(node.a.color + Math.floor((now - start) / 70)) % 8})`;
+        if (tr.sparkle && now - lastSpark > 32 && off < fadeFrom) {
+          lastSpark = now;
+          this.sparkle(this.pointAt(geo, off + Math.random() * 0.6), node.a.color);
+        }
         // Fully visible while any part is on the board; fade only past the edge.
         node.g.style.opacity = off <= fadeFrom ? '1' : String(Math.max(0, 1 - (off - fadeFrom) / EXIT_GLIDE_CELLS));
         if (!burst && off >= edge) {
           burst = true;
           const hd = geo.pts[geo.pts.length - 1];
-          this.burst(hd[0] + E.DX[node.a.dir] * edge, hd[1] + E.DY[node.a.dir] * edge, node.a.dir, node.a.color);
+          this.burst(hd[0] + E.DX[node.a.dir] * edge, hd[1] + E.DY[node.a.dir] * edge, node.a.dir, node.a.color, tr.firework);
         }
         if (t >= 1) { node.g.remove(); return false; }
         return true;
       });
     }
 
-    burst(x, y, dir, color) {
+    /** A glitter speck left behind by the Sparkle trail. */
+    sparkle(pt, color) {
+      const c = s('circle', { r: 0.045 + Math.random() * 0.05, cx: pt[0] + (Math.random() - 0.5) * 0.35, cy: pt[1] + (Math.random() - 0.5) * 0.35 });
+      c.style.fill = Math.random() < 0.35 ? '#fff' : `var(--a${(color + Math.floor(Math.random() * 3)) % 8})`;
+      this.gFx.append(c);
+      const start = performance.now(), life = 380 + Math.random() * 220;
+      this.addAnim((now) => {
+        const t = (now - start) / life;
+        c.style.opacity = String(Math.max(0, 1 - t));
+        if (t >= 1) { c.remove(); return false; }
+        return true;
+      });
+    }
+
+    burst(x, y, dir, color, big) {
       const parts = [];
-      for (let i = 0; i < 7; i++) {
-        const c = s('circle', { r: 0.05 + Math.random() * 0.05, cx: x, cy: y });
-        c.style.fill = `var(--a${color})`;
+      const n = big ? 22 : 7;
+      for (let i = 0; i < n; i++) {
+        const c = s('circle', { r: (big ? 0.06 : 0.05) + Math.random() * (big ? 0.07 : 0.05), cx: x, cy: y });
+        c.style.fill = `var(--a${big ? (color + i) % 8 : color})`;
         this.gFx.append(c);
-        const spread = (Math.random() - 0.5) * 1.6;
-        const speed = 1.2 + Math.random() * 1.6;
+        const spread = (Math.random() - 0.5) * (big ? 4.2 : 1.6);
+        const speed = (big ? 0.6 : 1.2) + Math.random() * (big ? 2.6 : 1.6);
         parts.push({ c, vx: E.DX[dir] * speed + -E.DY[dir] * spread, vy: E.DY[dir] * speed + E.DX[dir] * spread });
       }
       const start = performance.now();
       this.addAnim((now) => {
-        const t = (now - start) / 420;
+        const t = (now - start) / (big ? 620 : 420);
         for (const q of parts) {
           q.c.setAttribute('cx', x + q.vx * t * 0.6);
           q.c.setAttribute('cy', y + q.vy * t * 0.6);
@@ -1225,6 +1312,58 @@
     return wrap;
   }
 
+  /* ======================================================================
+     PROGRESS — XP, player level and coins. Coins only buy looks in the
+     Style shop; hints stay free (they cost stars instead).
+     ====================================================================== */
+  const XP_BASE = { easy: 10, medium: 15, hard: 20, expert: 30, nightmare: 40, insane: 55, impossible: 75 };
+  /** XP needed to go from level L to L + 1. */
+  const xpToNext = (L) => 60 + 20 * (L - 1);
+  function levelInfo(xp) {
+    let level = 1, need = xpToNext(1), into = xp;
+    while (into >= need) { into -= need; level++; need = xpToNext(level); }
+    return { level, into, need };
+  }
+  const levelUpCoins = (L) => 15 + 5 * L;
+  /** XP and coins for one clear. `replay` = this board was already cleared before. */
+  function rewardFor(mode, diff, stars, replay) {
+    const base = XP_BASE[diff] || 10;
+    let xp = base + (stars - 1) * Math.round(base * 0.25);
+    let coins = 1 + stars + Math.round(base / 10);
+    if (mode === 'zen') { xp = Math.round(xp * 0.6); coins = Math.max(1, Math.round(coins * 0.6)); }
+    if (replay) { xp = Math.max(1, Math.round(xp / 2)); coins = Math.max(1, Math.round(coins / 2)); }
+    if (mode === 'daily' && !replay) { xp += 20; coins += 10; }
+    return { xp, coins };
+  }
+  /** Add XP/coins; pays the level-up bonus for every level gained. */
+  function grant(xp, coins) {
+    const pr = Save.data.progress;
+    const before = levelInfo(pr.xp);
+    pr.xp += xp;
+    const after = levelInfo(pr.xp);
+    let bonus = 0;
+    for (let L = before.level + 1; L <= after.level; L++) bonus += levelUpCoins(L);
+    pr.coins += coins + bonus;
+    pr.coinsEarned += coins + bonus;
+    return { xp, coins, bonus, before, after, levelUp: after.level > before.level };
+  }
+  /** One-time catch-up so players who already cleared boards don't start at Level 1. */
+  function migrateProgress() {
+    const pr = Save.data.progress;
+    if (pr.migrated) return null;
+    pr.migrated = true;
+    let xp = 0, coins = 0;
+    const add = (r) => { xp += r.xp; coins += r.coins; };
+    const lv = Save.data.campaign.levels;
+    for (const k in lv) if (lv[k].completed) add(rewardFor('campaign', E.campaignLevelInfo(Number(k)).diff, lv[k].stars || 1, false));
+    const hist = Save.data.daily.history;
+    for (const k in hist) if (hist[k].completed) add(rewardFor('daily', hist[k].diff || 'medium', hist[k].stars || 1, false));
+    const zb = Save.data.zen.boards;
+    for (const d in zb) add({ xp: zb[d] * rewardFor('zen', d, 2, false).xp, coins: zb[d] * rewardFor('zen', d, 2, false).coins });
+    if (!xp) return null;
+    return grant(xp, coins);
+  }
+
   function recordFinish(sess, puzzle) {
     const res = { perfect: false, counted: counted(sess), time: sess.elapsed, notes: [], stars: starsFor(sess) };
     if (!res.counted) {
@@ -1252,6 +1391,7 @@
       const L = Number(sess.key);
       const lv = Save.data.campaign.levels;
       const rec = Object.assign({ plays: 1 }, lv[L]);
+      res.replay = !!rec.completed;
       if (rec.bestTime == null || sess.elapsed < rec.bestTime) { if (rec.completed) res.notes.push('New best time for this level'); rec.bestTime = sess.elapsed; }
       rec.bestBlocked = rec.bestBlocked == null ? sess.blocked : Math.min(rec.bestBlocked, sess.blocked);
       rec.completed = true;
@@ -1269,12 +1409,18 @@
     } else if (sess.mode === 'daily') {
       const hist = Save.data.daily.history;
       const rec = Object.assign({ attempted: true }, hist[sess.key]);
+      res.replay = !!rec.completed;
       if (!rec.completed) {
         rec.completed = true;
         rec.time = sess.elapsed;
         rec.perfect = perfect;
         rec.stars = res.stars;
         rec.diff = sess.diff;
+      } else if (res.stars > (rec.stars || 0)) {
+        /* A replay can raise the stars; the first clear's time and streak stay. */
+        res.notes.push(`New best: ${res.stars} stars`);
+        rec.stars = res.stars;
+        if (perfect) rec.perfect = true;
       }
       hist[sess.key] = rec;
       const sk = dailyStreaks();
@@ -1292,6 +1438,8 @@
     }
     if (res.fastest && sess.mode !== 'campaign') res.notes.push(`Fastest ${diffLabel(d)} clear yet`);
     if (perfect && st.perfectStreak > 1) res.notes.push(`${st.perfectStreak} perfect clears in a row`);
+    const rw = rewardFor(sess.mode, d, res.stars, !!res.replay);
+    res.reward = grant(rw.xp, rw.coins);
     Save.data.active = null;
     return res;
   }
@@ -1318,8 +1466,18 @@
   }
 
   /* ---------------- Home ---------------- */
+  const COIN_SVG = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /></svg>';
+  function renderPlayer() {
+    const pr = Save.data.progress;
+    const li = levelInfo(pr.xp);
+    $('#home-level').textContent = li.level;
+    $('#home-xp').textContent = `${fmtNum(li.into)} / ${fmtNum(li.need)} XP`;
+    $('#home-xp-bar').style.width = `${pct(li.into, li.need)}%`;
+    $('#home-coins').textContent = fmtNum(pr.coins);
+  }
   renderers.home = function () {
     HeroStream.start();
+    renderPlayer();
     const act = Save.data.active;
     const cont = $('#home-continue');
     if (act && !act.done && act.mode !== 'debug') {
@@ -1352,6 +1510,110 @@
     const z = Save.data.zen;
     const zt = Object.values(z.boards).reduce((a, b) => a + b, 0);
     $('#home-zen-sub').textContent = zt ? `${fmtNum(zt)} boards cleared · endless` : 'Endless boards, no final level';
+  };
+
+  /* ---------------- Style shop ---------------- */
+  /** Little preview boards for the shop cards (static SVG, no BoardView). */
+  function previewArrow(pts, color, extra) {
+    const d = BoardView.pathD(pts);
+    const [x1, y1] = pts[pts.length - 2], [x2, y2] = pts[pts.length - 1];
+    const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
+    const tip = [x2 + dx * TIP, y2 + dy * TIP], base = [x2 - dx * HEAD_BACK, y2 - dy * HEAD_BACK];
+    const px = -dy * HEAD_HALF, py = dx * HEAD_HALF;
+    const head = `M${tip[0]} ${tip[1]}L${base[0] + px} ${base[1] + py}L${base[0] - px} ${base[1] - py}Z`;
+    const body = BoardView.pathD(pts.slice(0, -1).concat([base]));
+    return `<g ${extra || ''}><path d="${body}" fill="none" stroke="var(--a${color})" stroke-width="0.17" stroke-linecap="round" stroke-linejoin="round"/>` +
+      `<path d="${head}" fill="var(--a${color})" stroke="var(--a${color})" stroke-width="0.06" stroke-linejoin="round"/></g>`;
+  }
+  function previewBoard(cols, rows, inner, arrows, board) {
+    let dots = '';
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) dots += `<circle cx="${x + 0.5}" cy="${y + 0.5}" r="0.06"/>`;
+    const svg = `<svg class="style-prev" viewBox="-0.3 -0.3 ${cols + 0.6} ${rows + 0.6}" aria-hidden="true">` +
+      `<rect class="board-bg" x="-0.3" y="-0.3" width="${cols + 0.6}" height="${rows + 0.6}" rx="0.5"/><g class="board-dot">${dots}</g>${inner}</svg>`;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = svg;
+    const el = wrap.firstChild;
+    applySkin(el, arrows, board);
+    return el;
+  }
+  const PREVIEW_ARROWS = () =>
+    previewArrow([[0.5, 0.5], [2.5, 0.5]], 0) +
+    previewArrow([[0.5, 2.5], [0.5, 1.5], [2.5, 1.5]], 4) +
+    previewArrow([[1.5, 2.5], [3.5, 2.5]], 2) +
+    previewArrow([[3.5, 1.5], [3.5, 0.5], [4.5, 0.5]], 6) +
+    previewArrow([[4.5, 2.5], [4.5, 1.5]], 1);
+  function trailPreview(id) {
+    const y = 1;
+    const tr = TRAILS[id];
+    const tail = 3.0, len = tr.len;
+    let fx = '';
+    if (tr.rainbow) {
+      for (let i = 0; i < 4; i++) fx += `<path d="M${tail - len + (len / 4) * i} ${y}H${tail - len + (len / 4) * (i + 1)}" stroke="var(--a${(i + 3) % 8})" stroke-width="0.15" opacity="0.75" stroke-linecap="round"/>`;
+    } else {
+      fx += `<path d="M${tail - len} ${y}H${tail}" stroke="var(--a4)" stroke-width="${0.17 * (tr.width || 0.7)}" opacity="${tr.opacity}" stroke-linecap="round"/>`;
+    }
+    if (tr.sparkle) {
+      [[0.6, 0.62, 0.07], [1.2, 1.38, 0.05], [1.7, 0.8, 0.08], [2.3, 1.3, 0.06], [0.9, 1.15, 0.05], [2.6, 0.7, 0.05]]
+        .forEach(([x, yy, r], i) => { fx += `<circle cx="${x}" cy="${yy}" r="${r}" fill="${i % 3 === 0 ? '#fff' : `var(--a${(4 + i) % 8})`}"/>`; });
+    }
+    let arrow = previewArrow([[tail, y], [tail + 2, y]], 4);
+    if (tr.firework) {
+      for (let i = 0; i < 12; i++) {
+        const ang = (Math.PI * 2 * i) / 12, r = 0.45 + (i % 3) * 0.18;
+        fx += `<circle cx="${(5.9 + Math.cos(ang) * r).toFixed(2)}" cy="${(y + Math.sin(ang) * r).toFixed(2)}" r="0.07" fill="var(--a${i % 8})"/>`;
+      }
+      arrow = previewArrow([[tail + 0.4, y], [tail + 2, y]], 4);
+    }
+    return previewBoard(7, 2, fx + arrow);
+  }
+  function buyOrEquip(kind, item) {
+    const pr = Save.data.progress;
+    const owned = pr.owned[kind].includes(item.id);
+    if (!owned) {
+      if (pr.coins < item.price) return;
+      pr.coins -= item.price;
+      pr.owned[kind].push(item.id);
+      Sound.play('complete');
+      toast(`${item.name} unlocked`);
+    } else Sound.play('tap');
+    pr.equip[kind] = item.id;
+    Save.write();
+    renderers.style();
+  }
+  renderers.style = function () {
+    const pr = Save.data.progress;
+    const li = levelInfo(pr.xp);
+    $('#style-coins').textContent = fmtNum(pr.coins);
+    const lvl = $('#style-level');
+    lvl.innerHTML = `<span class="lvl-badge"><small>Level</small><b>${li.level}</b></span>` +
+      `<span class="player-mid"><span class="player-row"><span>${fmtNum(li.need - li.into)} XP to Level ${li.level + 1}</span><span>+${levelUpCoins(li.level + 1)} coins</span></span>` +
+      `<span class="xp-bar"><span style="width:${pct(li.into, li.need)}%"></span></span></span>`;
+    const wrap = $('#style-sections');
+    wrap.textContent = '';
+    for (const [kind, title] of STYLE_KINDS) {
+      const grid = h('div', { class: 'style-grid' });
+      for (const it of STYLE[kind]) {
+        const owned = pr.owned[kind].includes(it.id);
+        const on = pr.equip[kind] === it.id;
+        const prev = kind === 'arrows' ? previewBoard(5, 3, PREVIEW_ARROWS(), it.id)
+          : kind === 'board' ? previewBoard(5, 3, PREVIEW_ARROWS(), null, it.id)
+          : trailPreview(it.id);
+        let label, cls = 'style-btn', disabled = false;
+        if (on) { label = 'Equipped'; cls += ' is-on'; disabled = true; }
+        else if (owned) label = 'Use';
+        else if (pr.coins >= it.price) { label = ''; cls += ' is-buy'; }
+        else { label = ''; cls += ' is-locked'; disabled = true; }
+        const btn = h('button', { class: cls, type: 'button', onclick: () => buyOrEquip(kind, it) });
+        if (label) btn.textContent = label;
+        else btn.innerHTML = `${COIN_SVG}<span>${fmtNum(it.price)}</span>`;
+        btn.disabled = disabled;
+        if (!owned) btn.setAttribute('aria-label', pr.coins >= it.price ? `Buy ${it.name} for ${it.price} coins` : `${it.name}: needs ${it.price - pr.coins} more coins`);
+        const card = h('div', { class: 'style-card' + (on ? ' is-on' : '') }, prev,
+          h('div', { class: 'style-meta' }, h('strong', { text: it.name }), it.desc ? h('span', { text: it.desc }) : null), btn);
+        grid.append(card);
+      }
+      wrap.append(h('section', { class: 'style-section' }, h('h3', { text: title }), grid));
+    }
   };
 
   /* ---------------- Campaign ---------------- */
@@ -1629,7 +1891,7 @@
   $('#reset-open').addEventListener('click', () => {
     confirmDialog({
       title: 'Reset all progress?',
-      body: '<p>This will permanently erase:</p><ul><li>Campaign progress</li><li>Statistics</li><li>Daily history and streaks</li><li>Zen records</li><li>Any board in progress</li></ul><p class="hold-note">Press and hold Reset to confirm. Your settings stay as they are.</p>',
+      body: '<p>This will permanently erase:</p><ul><li>Campaign progress</li><li>Your level, coins and Style shop items</li><li>Statistics</li><li>Daily history and streaks</li><li>Zen records</li><li>Any board in progress</li></ul><p class="hold-note">Press and hold Reset to confirm. Your settings stay as they are.</p>',
       ok: 'Reset',
       danger: true,
       hold: 1200,
@@ -1719,6 +1981,7 @@
     }
     if (usesHearts(sess.mode) && res.counted && sess.hearts < MAX_HEARTS) res.notes.push(`${sess.hearts} of ${MAX_HEARTS} hearts left`);
     $('#complete-note').textContent = res.notes.join(' · ');
+    showReward(res.reward);
     const stats = $('#complete-stats');
     stats.textContent = '';
     [[fmtTime(sess.elapsed), 'time'], [puzzle.arrows.length, 'arrows'], [sess.blocked, 'blocked'], [sess.hints, 'hints']]
@@ -1738,6 +2001,14 @@
     acts.textContent = '';
     const btn = (label, cls, fn) => h('button', { class: cls, type: 'button', onclick: fn, text: label });
     clearTimeout(zenTimer);
+    /* Fewer than 3 stars: offer a fresh run of the same board. */
+    const canRetry = res.counted && res.stars < MAX_STARS && (sess.mode === 'campaign' || sess.mode === 'daily');
+    if (canRetry) {
+      acts.append(btn(`Try again for ${MAX_STARS} stars`, 'ghost-btn retry-btn', () => {
+        ov.hidden = true;
+        Game.open(sess.mode, sess.key, sess.diff, { fresh: true });
+      }));
+    }
     if (sess.mode === 'campaign') {
       const L = Number(sess.key);
       acts.append(btn('All levels', 'ghost-btn', () => showScreen('campaign')));
@@ -1765,7 +2036,24 @@
     announce(`${res.perfect ? 'Perfect clear' : 'Board cleared'} in ${fmtTime(sess.elapsed)}. ${res.notes.join('. ')}`);
   }
 
+  function showReward(rw) {
+    const box = $('#complete-reward');
+    box.textContent = '';
+    box.hidden = !rw;
+    if (!rw) return;
+    const a = rw.after, b = rw.before;
+    const from = rw.levelUp ? 0 : pct(b.into, b.need);
+    box.innerHTML =
+      `<div class="reward-row"><span class="reward-xp">+${fmtNum(rw.xp)} XP</span><span class="coin-pill">${COIN_SVG}<b>+${fmtNum(rw.coins + rw.bonus)}</b></span></div>` +
+      `<div class="reward-level"><span class="lvl-badge small"><small>Level</small><b>${a.level}</b></span>` +
+      `<span class="xp-bar"><span style="width:${from}%"></span></span><span class="reward-need">${fmtNum(a.into)} / ${fmtNum(a.need)}</span></div>` +
+      (rw.levelUp ? `<p class="levelup">Level up! You reached Level ${a.level}. +${fmtNum(rw.bonus)} bonus coins</p>` : '');
+    const bar = $('.xp-bar span', box);
+    requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.width = `${pct(a.into, a.need)}%`; }));
+  }
+
   function showFailed(sess, puzzle) {
+    $('#complete-reward').hidden = true;
     if (currentScreen !== 'game' || Game.session !== sess) return;
     const ov = $('#complete-overlay');
     $$('.zen-next', ov).forEach((n) => n.remove());
@@ -1962,6 +2250,7 @@
         star: `<path d="${STAR_PATH}"/>`,
         pinch: '<path d="M7 7l-3-3M4 8V4h4M17 17l3 3M20 16v4h-4"/><circle cx="12" cy="12" r="2.2"/>',
         save: '<path d="M12 3v12M7 10l5 5 5-5M5 20h14"/>',
+        coin: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/>',
         path: '<path d="M4 12h8" /><path d="M14 12h2M19 12h1" stroke-dasharray="0" /><path d="M9 8l4 4-4 4" />',
       };
       const tips = [
@@ -1969,6 +2258,7 @@
         ['hint', 'Stuck? Tap Hint and a safe arrow lights up.'],
         ['path', 'Not sure where an arrow goes? Press and hold it to see its path. Letting go won’t move it.'],
         ['star', 'Earn up to 3 stars: clear the board, clear it without hints, then clear it without a single blocked tap.'],
+        ['coin', 'Every clear earns XP and coins. More stars and harder boards earn more. Spend coins on new arrow colors, boards and trails in the Style shop.'],
         ['pinch', touchScreen() ? 'On big boards, use two fingers to zoom: spread them apart to zoom in, bring them together to zoom out. Drag with one finger to move around.' : 'On big boards, scroll to zoom in and out, and drag to move around.'],
         ['save', 'Your progress lives in this app. Removing the app deletes it, so make a backup in Settings first.'],
       ];
@@ -2127,6 +2417,7 @@
     Save.data.route = 'home';
     Save.data.seenHowTo = true;
     migrateStars();
+    migrateProgress();
     Save.write();
     puzzleCache.clear();
     calMonth = null;
@@ -2320,6 +2611,8 @@
     Save.load();
     if (/debug/.test(location.hash)) Save.data.settings.dev = true;
     migrateStars();
+    const caughtUp = migrateProgress();
+    if (caughtUp) Save.write();
     if (Save.data.settings.sound) Sound.preload();
     HeroStream.init();
     Game.view = new BoardView($('#board'));
@@ -2334,9 +2627,10 @@
     else if (Save.data.route === 'game' && a && !a.done) Game.open(a.mode, a.key, a.diff);
     else showScreen(Save.data.route === 'game' ? 'home' : Save.data.route || 'home');
     if (!Save.ok) setTimeout(() => toast('This browser is blocking storage, so progress will not be saved.'), 600);
+    else if (caughtUp) setTimeout(() => toast(`New: levels and coins! You start at Level ${caughtUp.after.level}.`, 5000), 700);
   }
   boot();
 
   // Exposed for console testing only.
-  window.Slipstream = { Game, Save, E, Sound };
+  window.Slipstream = { Game, Save, E, Sound, levelInfo, rewardFor };
 })();

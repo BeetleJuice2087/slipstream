@@ -32,6 +32,15 @@
         <p class="tagline">Tap an arrow and it flies. Find the order that clears the board.</p>
       </header>
 
+      <button class="player-card" id="home-player" type="button" data-go="style" aria-label="Your level and coins. Open the Style shop.">
+        <span class="lvl-badge"><small>Level</small><b id="home-level">1</b></span>
+        <span class="player-mid">
+          <span class="player-row"><span id="home-xp">0 / 60 XP</span></span>
+          <span class="xp-bar"><span id="home-xp-bar"></span></span>
+        </span>
+        <span class="coin-pill"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /></svg><b id="home-coins">0</b></span>
+      </button>
+
       <button class="continue-card" id="home-continue" type="button" hidden>
         <span class="continue-label">Continue</span>
         <span class="continue-title" id="home-continue-title">Level 4</span>
@@ -66,8 +75,11 @@
       </nav>
 
       <div class="home-row">
-        <button class="pill-btn wide" type="button" data-go="howto">
+        <button class="pill-btn" type="button" data-go="howto">
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M9.6 9.3a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.9v.3M12 17.2v.1" /></svg>How to play
+        </button>
+        <button class="pill-btn" type="button" data-go="style">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.4 5 5.4.6-4 3.7 1.1 5.4L12 15.5l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z" /></svg>Style
         </button>
         <button class="pill-btn" type="button" data-go="stats">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19V11M12 19V5M19 19v-6" /></svg>Statistics
@@ -176,6 +188,20 @@
         <button class="ghost-btn" type="button" id="howto-skip">Skip</button>
         <button class="primary-btn" type="button" id="howto-next" disabled>Next</button>
       </div>
+    </div>
+  </section>
+
+  <!-- ============================ STYLE SHOP ============================ -->
+  <section class="screen screen-menu" id="screen-style" data-screen="style" hidden>
+    <div class="menu-col wide">
+      <header class="screen-head">
+        <button class="icon-btn" type="button" data-back aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+        <h2>Style</h2>
+        <span class="coin-pill"><svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /></svg><b id="style-coins">0</b></span>
+      </header>
+      <p class="screen-lede">Clear boards to earn XP and coins. Spend coins on new looks. Hints are still free.</p>
+      <div class="style-level" id="style-level"></div>
+      <div id="style-sections"></div>
     </div>
   </section>
 
@@ -338,6 +364,7 @@
       <h2 class="complete-title" id="complete-title">Cleared</h2>
       <p class="complete-note" id="complete-note"></p>
       <div class="complete-stats" id="complete-stats"></div>
+      <div class="complete-reward" id="complete-reward" hidden></div>
       <div class="sheet-actions" id="complete-actions"></div>
     </div>
   </div>

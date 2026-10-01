@@ -291,6 +291,7 @@ kbd {
 .tip-heart { stroke: var(--a7); } .tip-heart path { fill: var(--a7); }
 .tip-hint { stroke: var(--accent); }
 .tip-star { stroke: var(--gold); } .tip-star path { fill: var(--gold); }
+.tip-coin { stroke: var(--gold); }
 .tip-pinch { stroke: var(--a4); }
 .tip-save { stroke: var(--good); }
 .tip-path { stroke: var(--gold); }
@@ -864,6 +865,7 @@ kbd {
 .sheet h2 { margin: 0 0 8px; font-family: var(--font-display); font-size: 1.4rem; }
 .sheet-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 .sheet-actions > * { flex: 1 1 140px; }
+.sheet-actions > .retry-btn { flex-basis: 100%; border-color: var(--gold); color: var(--gold); }
 .confirm-sheet ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
 .confirm-sheet p { margin: 0; color: var(--muted); }
 .hold-note { margin-top: 12px !important; font-size: 0.85rem; }
@@ -912,7 +914,8 @@ kbd {
   position: absolute; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   transform: translate(-50%, 20px);
   padding: 10px 18px;
-  border-radius: 999px;
+  border-radius: 18px;
+  width: max-content;
   background: var(--text); color: var(--bg);
   font-weight: 700; font-size: 0.9rem;
   opacity: 0; pointer-events: none;
@@ -930,3 +933,111 @@ kbd {
   transition-duration: 0.001s !important;
 }
 .reduce-motion .arrow.is-hint .body { stroke-width: calc(var(--aw) + 0.1); }
+
+/* ---------------- Style shop skins (board only) ----------------
+   Each arrow theme has a dark-board and a light-board palette (--dN / --lN).
+   The board picks one by its tone: dark/light boards force it, the
+   default board follows the app's light or dark mode. Generated table. */
+.skin { --d0: #ff8070; --d1: #ffc35c; --d2: #b9e86e; --d3: #52dcb4; --d4: #62c9ff; --d5: #9aa2ff; --d6: #d893ff; --d7: #ff86bb;
+  --l0: #e04a38; --l1: #d38400; --l2: #5a9512; --l3: #0c9774; --l4: #1383c7; --l5: #4f5be0; --l6: #9443d0; --l7: #d2367f; }
+.skin.th-pastel { --d0: #ffb4a8; --d1: #ffdf9e; --d2: #d4f0a2; --d3: #a6ecd4; --d4: #a9dcff; --d5: #c4c8ff; --d6: #e6c0ff; --d7: #ffc1da;
+  --l0: #d5705f; --l1: #b98a2a; --l2: #6f9c3a; --l3: #2f9c80; --l4: #3f8fc0; --l5: #6a72d2; --l6: #9c62c8; --l7: #cc5f94; }
+.skin.th-sunset { --d0: #ff6b5b; --d1: #ffa24c; --d2: #ffd166; --d3: #ff7eb6; --d4: #c77dff; --d5: #f25f8c; --d6: #ffb38a; --d7: #9d7bff;
+  --l0: #d94436; --l1: #d9711a; --l2: #b88a00; --l3: #d13f86; --l4: #8f3fd6; --l5: #c2265e; --l6: #c4622b; --l7: #6a48d6; }
+.skin.th-ocean { --d0: #4cc9f0; --d1: #4895ef; --d2: #56e3c4; --d3: #7ae3ff; --d4: #ffb4a2; --d5: #f7d794; --d6: #3dd6a8; --d7: #8ab4ff;
+  --l0: #0a8fbf; --l1: #2766c9; --l2: #0e9c7f; --l3: #1f86a8; --l4: #d8604a; --l5: #a8801f; --l6: #0b8a64; --l7: #4a6fd8; }
+.skin.th-forest { --d0: #8bd17c; --d1: #c9e265; --d2: #e0b25c; --d3: #d98a5f; --d4: #5fc79a; --d5: #e57a9a; --d6: #a3c55b; --d7: #7cc4e4;
+  --l0: #3f8f30; --l1: #7a9200; --l2: #b07d16; --l3: #b55b2f; --l4: #1f8a5e; --l5: #c2416b; --l6: #6a8a1c; --l7: #2e83a8; }
+.skin.th-neon { --d0: #ff3b6b; --d1: #ffe600; --d2: #7dff3a; --d3: #00ffc6; --d4: #00d0ff; --d5: #8c7dff; --d6: #e040ff; --d7: #ff3fb4;
+  --l0: #e3002f; --l1: #d98200; --l2: #2ea300; --l3: #00a383; --l4: #0088d1; --l5: #4a3cff; --l6: #b100d6; --l7: #e6007e; }
+.skin.th-jewel { --d0: #ff5577; --d1: #ffd36b; --d2: #3ee08f; --d3: #3fb6ff; --d4: #b07cff; --d5: #ff9a3c; --d6: #4fe3d8; --d7: #ff7ad9;
+  --l0: #c8143d; --l1: #b07d00; --l2: #0f9a58; --l3: #0f6fc8; --l4: #7a35d6; --l5: #cc5f00; --l6: #0a958c; --l7: #c22f9a; }
+.skin { --a0: var(--d0); --a1: var(--d1); --a2: var(--d2); --a3: var(--d3); --a4: var(--d4); --a5: var(--d5); --a6: var(--d6); --a7: var(--d7); }
+.skin.tone-light { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .skin.tone-auto { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); } }
+:root[data-theme="light"] .skin.tone-auto { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); }
+.skin.bg-midnight { --board: #0a0b1f; --dot: #2a2e66; --line: #23275a; }
+.skin.bg-deepsea { --board: #062331; --dot: #1a4d62; --line: #12384a; }
+.skin.bg-pine { --board: #0d2219; --dot: #27503f; --line: #1b3a2d; }
+.skin.bg-paper { --board: #fbf5e6; --dot: #ddcca5; --line: #e6dabd; }
+.skin.bg-blush { --board: #fff0f3; --dot: #efbfcb; --line: #f3d0d8; }
+
+/* ---------------- Level, XP and coins ---------------- */
+.coin { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.coin circle:first-child { fill: color-mix(in srgb, var(--gold) 22%, transparent); }
+.coin-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px 5px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--gold) 14%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--gold) 45%, transparent);
+  color: var(--gold); font-weight: 800; white-space: nowrap;
+}
+.coin-pill b { color: var(--text); font-variant-numeric: tabular-nums; }
+.lvl-badge {
+  display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 54px; height: 54px; flex: none;
+  border-radius: 16px;
+  background: var(--accent); color: var(--accent-ink);
+  line-height: 1;
+}
+.lvl-badge small { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.85; }
+.lvl-badge b { font-family: var(--font-display); font-size: 1.35rem; margin-top: 3px; }
+.lvl-badge.small { width: 44px; height: 44px; border-radius: 13px; }
+.lvl-badge.small b { font-size: 1.1rem; }
+.xp-bar { display: block; height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.xp-bar > span { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, var(--a4), var(--a5)); transition: width 0.9s cubic-bezier(.2,.8,.2,1); }
+.reduce-motion .xp-bar > span { transition: none; }
+.player-mid { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
+.player-row { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
+.player-row > span:first-child { color: var(--text); font-variant-numeric: tabular-nums; }
+.player-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; text-align: left;
+  border-radius: var(--r-lg); border: 1px solid var(--line);
+  background: var(--surface); cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.player-card:hover { border-color: var(--accent); }
+
+/* Reward strip on the Cleared sheet */
+.complete-reward { margin-top: 16px; padding: 12px 14px; border-radius: var(--r-md); background: var(--surface-2); text-align: left; }
+.reward-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.reward-xp { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; color: var(--accent); }
+.reward-level { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+.reward-level .xp-bar { flex: 1; background: var(--surface); }
+.reward-need { font-size: 0.8rem; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.levelup {
+  margin: 10px 0 0; padding: 8px 12px; border-radius: var(--r-sm);
+  background: var(--gold); color: var(--bg); font-weight: 800; text-align: center;
+  animation: levelPop 0.5s cubic-bezier(.2,1.6,.4,1) 0.6s both;
+}
+@keyframes levelPop { from { transform: scale(0.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.reduce-motion .levelup { animation: none; }
+
+/* Style shop */
+#screen-style .screen-head .coin-pill { margin-left: auto; }
+.style-level { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--r-lg); border: 1px solid var(--line); background: var(--surface); margin-bottom: 8px; }
+.style-section h3 { font-family: var(--font-display); font-size: 1rem; margin: 18px 0 10px; }
+.style-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.style-card {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 10px; border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--surface);
+}
+.style-card.is-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.style-prev { display: block; width: 100%; height: auto; border-radius: var(--r-sm); }
+.style-meta { display: flex; flex-direction: column; gap: 1px; min-height: 2.4em; }
+.style-meta strong { font-size: 0.98rem; }
+.style-meta span { font-size: 0.8rem; color: var(--muted); }
+.style-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 40px; border-radius: 999px; font-weight: 700; cursor: pointer;
+  border: 2px solid var(--line); background: transparent;
+}
+.style-btn:hover:not(:disabled) { border-color: var(--accent); }
+.style-btn.is-on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); cursor: default; }
+.style-btn.is-buy { border-color: var(--gold); color: var(--gold); }
+.style-btn.is-buy span { color: var(--text); }
+.style-btn.is-locked { opacity: 0.55; cursor: default; color: var(--muted); }
+.style-btn .coin { width: 16px; height: 16px; }
+@media (max-width: 360px) { .style-grid { grid-template-columns: 1fr 1fr; gap: 8px; } }
