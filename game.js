@@ -3322,7 +3322,6 @@
     l.textContent = '';
     liveTimer = setTimeout(() => { l.textContent = msg; }, 30);
   }
-  const touchScreen = () => !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 
   /* ======================================================================
      HOW TO PLAY — four short steps with small hand-made practice boards.
@@ -3438,8 +3437,8 @@
         ['path', 'Not sure where an arrow goes? Press and hold it to see its path. Letting go won’t move it.'],
         ['star', 'Earn up to 3 stars: clear the board, clear it without hints, then clear it without a single blocked tap.'],
         ['coin', 'Every clear earns XP and coins. More stars and harder boards earn more. Spend coins on new arrow colors, boards and trails in the Style shop.'],
-        ['cube', 'Want a twist? In Zen, switch to the 3D cube. Drag to spin it; arrows wrap around its edges and fly off the side they point to.'],
-        ['pinch', touchScreen() ? 'On big boards, use two fingers to zoom: spread them apart to zoom in, bring them together to zoom out. Drag with one finger to move around.' : 'On big boards, scroll to zoom in and out, and drag to move around.'],
+        ['cube', 'Want a twist? Switch Zen to 3D, or play the 3D bonus levels in Campaign. Drag to spin the shape; arrows bend over its edges and fly off the way they point.'],
+        ['pinch', 'On big boards, zoom in and out by pinching with two fingers on a phone or tablet, or with the mouse wheel or trackpad on a computer. Drag to move around.'],
         ['save', 'Your progress lives in this app. Removing the app deletes it, so make a backup in Settings first.'],
       ];
       const ul = $('#howto-tips');
