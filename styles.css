@@ -292,6 +292,7 @@ kbd {
 .tip-hint { stroke: var(--accent); }
 .tip-star { stroke: var(--gold); } .tip-star path { fill: var(--gold); }
 .tip-coin { stroke: var(--gold); }
+.tip-cube { stroke: var(--a5); }
 .tip-pinch { stroke: var(--a4); }
 .tip-save { stroke: var(--good); }
 .tip-path { stroke: var(--gold); }
@@ -1130,3 +1131,12 @@ kbd {
 .ms-state small .coin { width: 13px; height: 13px; }
 .ms-item:not(.is-done) .ms-state small { opacity: 0.75; }
 .ach-kicker { font-size: 0.68rem !important; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold) !important; }
+
+/* Zen 3D cube */
+.cube-board { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.cube-board:active { cursor: grabbing; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 5px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); }
+.seg button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 0; border-radius: 999px; background: transparent; font-weight: 700; cursor: pointer; color: var(--muted); }
+.seg button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.seg button.is-on { background: var(--accent); color: var(--accent-ink); }
+.zen-dim-note { margin: -4px 0 0; color: var(--muted); font-size: 0.9rem; }

@@ -164,6 +164,15 @@
         <span class="continue-title" id="zen-continue-title">Medium</span>
         <svg class="continue-go" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M12 6l6 6-6 6" /></svg>
       </button>
+      <div class="seg" id="zen-dim" role="radiogroup" aria-label="Board type">
+        <button type="button" role="radio" data-dim="2d">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 12h6M12 9l3 3-3 3" /></svg>2D boards
+        </button>
+        <button type="button" role="radio" data-dim="3d">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" /><path d="M4 7.5l8 4.5 8-4.5M12 12v9" /></svg>3D shapes
+        </button>
+      </div>
+      <p class="zen-dim-note" id="zen-dim-note" hidden>Cubes and block shapes. Arrows wrap around corners and fly off the way they point. Drag to spin, tap to release.</p>
       <div class="zen-choices" id="zen-choices" role="list"></div>
     </div>
   </section>
@@ -366,6 +375,7 @@
         <g class="layer-fx"></g>
         <g class="layer-labels"></g>
       </svg>
+      <canvas id="cube" class="board cube-board" tabindex="0" hidden aria-label="3D puzzle cube. Drag to turn it, tap an arrow to release it."></canvas>
       <p id="board-help" class="sr-only">Each arrow slides forward in the direction of its head. It escapes if nothing is in its way.</p>
       <div class="board-loading" id="board-loading" hidden><span class="spinner" aria-hidden="true"></span>Building board…</div>
     </div>
@@ -449,6 +459,7 @@
 </div>
 <script src="sounds.js"></script>
 <script src="engine.js"></script>
+<script src="cube.js"></script>
 <script src="game.js"></script>
 <!--PAGE-END-->
 <script src="pwa.js"></script>

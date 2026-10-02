@@ -65,7 +65,7 @@
       settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', colorblind: false, highContrast: false, preview: true, dev: false },
       campaign: { unlocked: 1, levels: {} },
       daily: { history: {}, longestStreak: 0 },
-      zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [] },
+      zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [], dim: '2d' },
       stats: {
         played: 0, completed: 0, perfect: 0, playMs: 0,
         arrows: 0, taps: 0, success: 0, blocked: 0, hints: 0,
@@ -334,12 +334,17 @@
      deterministically from it (campaign level, date, or Zen seed).
      ====================================================================== */
   const puzzleCache = new Map();
+  /** Zen 3D boards are stored with a "3d." prefix on their seed. */
+  const isCubeKey = (key) => String(key).startsWith('3d.');
+  /** Which generator built a board; a saved board from another version is dropped. */
+  const genFor = (key) => (isCubeKey(key) ? E.GENERATOR_VERSION + '+' + SlipCube.CUBE_VERSION : E.GENERATOR_VERSION);
   function puzzleFor(sess) {
     const key = `${sess.mode}|${sess.key}|${sess.diff}`;
     if (puzzleCache.has(key)) return puzzleCache.get(key);
     let p;
     if (sess.mode === 'campaign') p = E.campaignPuzzle(Number(sess.key));
     else if (sess.mode === 'daily') p = E.dailyPuzzle(sess.key);
+    else if (isCubeKey(sess.key)) p = SlipCube.zenCube(String(sess.key).slice(3), sess.diff);
     else p = E.zenPuzzle(sess.key, sess.diff);
     if (puzzleCache.size > 6) puzzleCache.delete(puzzleCache.keys().next().value);
     puzzleCache.set(key, p);
@@ -899,6 +904,762 @@
      does nothing, so checking a path never costs a blocked tap or a heart. */
   const HOLD_MS = 320;
 
+  /* ======================================================================
+     CUBE VIEW — the 3D board (Zen 3D). Drawn on a <canvas> with a small
+     hand-written 3D pipeline: rotate, perspective-project, hide the faces
+     that point away. Arrows are polylines on the cube's surface; a released
+     arrow slithers along its path and flies straight off the face's edge.
+     Same interface as BoardView so Game can use either one.
+     ====================================================================== */
+  const CUBE_HOLD_MS = 320;
+  const clamp01 = (v) => Math.max(0, Math.min(1, v));
+  /* Tiny OKLab helpers so outlines match the 2D board's look. */
+  const srgbToLin = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const linToSrgb = (c) => { c = clamp01(c); return c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055; };
+  function hexToRgb(hex) {
+    hex = String(hex || '').trim();
+    if (hex.startsWith('rgb')) { const m = hex.match(/[\d.]+/g) || [0, 0, 0]; return [m[0] / 255, m[1] / 255, m[2] / 255]; }
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map((c) => c + c).join('');
+    const n = parseInt(hex || '0', 16);
+    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+  }
+  function rgbToCss([r, g, b], a) {
+    const f = (v) => Math.round(clamp01(v) * 255);
+    return a == null ? `rgb(${f(r)},${f(g)},${f(b)})` : `rgba(${f(r)},${f(g)},${f(b)},${a})`;
+  }
+  function toOklch(rgb) {
+    const [r, g, b] = rgb.map(srgbToLin);
+    let l = 0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b, m = 0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b, s2 = 0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b;
+    l = Math.cbrt(l); m = Math.cbrt(m); s2 = Math.cbrt(s2);
+    const L = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s2, A = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s2, B = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s2;
+    return [L, Math.hypot(A, B), Math.atan2(B, A)];
+  }
+  function fromOklch([L, C, H]) {
+    const A = C * Math.cos(H), B = C * Math.sin(H);
+    let l = L + 0.3963377774 * A + 0.2158037573 * B, m = L - 0.1055613458 * A - 0.0638541728 * B, s2 = L - 0.0894841775 * A - 1.2914855480 * B;
+    l = l * l * l; m = m * m * m; s2 = s2 * s2 * s2;
+    return [linToSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s2), linToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s2), linToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s2)];
+  }
+  const mixRgb = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  /* 3×3 rotation helpers (row-major arrays of 9). */
+  const matMul = (a, b) => {
+    const o = new Array(9);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) o[r * 3 + c] = a[r * 3] * b[c] + a[r * 3 + 1] * b[3 + c] + a[r * 3 + 2] * b[6 + c];
+    return o;
+  };
+  const rotX = (t) => [1, 0, 0, 0, Math.cos(t), -Math.sin(t), 0, Math.sin(t), Math.cos(t)];
+  const rotY = (t) => [Math.cos(t), 0, Math.sin(t), 0, 1, 0, -Math.sin(t), 0, Math.cos(t)];
+  const rotAxis = (ax, t) => {
+    const [x, y, z] = ax, c = Math.cos(t), s2 = Math.sin(t), C = 1 - c;
+    return [c + x * x * C, x * y * C - z * s2, x * z * C + y * s2, y * x * C + z * s2, c + y * y * C, y * z * C - x * s2, z * x * C - y * s2, z * y * C + x * s2, c + z * z * C];
+  };
+  const apply = (m, v) => [m[0] * v[0] + m[1] * v[1] + m[2] * v[2], m[3] * v[0] + m[4] * v[1] + m[5] * v[2], m[6] * v[0] + m[7] * v[1] + m[8] * v[2]];
+  const applyT = (m, v) => [m[0] * v[0] + m[3] * v[1] + m[6] * v[2], m[1] * v[0] + m[4] * v[1] + m[7] * v[2], m[2] * v[0] + m[5] * v[1] + m[8] * v[2]];
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm3 = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const START_ROT = () => matMul(rotX(0.42), rotY(-0.62));
+  /* Quaternions, for smooth turns between two orientations. */
+  function matToQuat(m) {
+    const t = m[0] + m[4] + m[8];
+    let w, x, y, z;
+    if (t > 0) { const s2 = Math.sqrt(t + 1) * 2; w = s2 / 4; x = (m[7] - m[5]) / s2; y = (m[2] - m[6]) / s2; z = (m[3] - m[1]) / s2; }
+    else if (m[0] > m[4] && m[0] > m[8]) { const s2 = Math.sqrt(1 + m[0] - m[4] - m[8]) * 2; w = (m[7] - m[5]) / s2; x = s2 / 4; y = (m[1] + m[3]) / s2; z = (m[2] + m[6]) / s2; }
+    else if (m[4] > m[8]) { const s2 = Math.sqrt(1 + m[4] - m[0] - m[8]) * 2; w = (m[2] - m[6]) / s2; x = (m[1] + m[3]) / s2; y = s2 / 4; z = (m[5] + m[7]) / s2; }
+    else { const s2 = Math.sqrt(1 + m[8] - m[0] - m[4]) * 2; w = (m[3] - m[1]) / s2; x = (m[2] + m[6]) / s2; y = (m[5] + m[7]) / s2; z = s2 / 4; }
+    return [w, x, y, z];
+  }
+  function quatToMat([w, x, y, z]) {
+    return [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w), 2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w), 2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)];
+  }
+  function slerp(a, b, t) {
+    let d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
+    if (d < 0) { b = b.map((v) => -v); d = -d; }
+    if (d > 0.9995) { const r = a.map((v, i) => v + (b[i] - v) * t); const l = Math.hypot(...r); return r.map((v) => v / l); }
+    const th = Math.acos(d), s0 = Math.sin((1 - t) * th) / Math.sin(th), s1 = Math.sin(t * th) / Math.sin(th);
+    return a.map((v, i) => v * s0 + b[i] * s1);
+  }
+  /* The 24 ways to turn a cube onto itself (signed permutation matrices, det +1). */
+  const CUBE_TURNS = (() => {
+    const out = [], perms = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    for (const p of perms) for (let sg = 0; sg < 8; sg++) {
+      const m = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      for (let r = 0; r < 3; r++) m[r * 3 + p[r]] = (sg >> r) & 1 ? -1 : 1;
+      const det = m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) + m[2] * (m[3] * m[7] - m[4] * m[6]);
+      if (det > 0) out.push(m);
+    }
+    return out;
+  })();
+
+  class CubeView {
+    constructor(canvas, host) {
+      this.svg = canvas;           // Game code calls it .svg for both views
+      this.canvas = canvas;
+      this.ctx = canvas.getContext('2d');
+      this.h = host;               // { release(id), inputLocked() }
+      this.p = null;
+      this.board = null;
+      this.nodes = new Map();      // alive arrows (id → info), mirrors BoardView
+      this.R = START_ROT();
+      this.zoom = { scale: 1 };
+      this.selected = -1;
+      this.anims = new Set();
+      this.fx = [];                // particles, rays, flashes
+      this.flying = [];            // arrows in flight
+      this.raf = 0;
+      this.dirty = true;
+      this.loop = this.loop.bind(this);
+      this.pointers = new Map();
+      this.spin = null;            // momentum
+      this.bindInput();
+    }
+
+    /* ---------------- setup ---------------- */
+    load(puzzle, board) {
+      this.p = puzzle;
+      this.board = board;
+      this.g = SlipCube.geometryOf(puzzle);
+      const g = this.g;
+      // Spin around the shape's own middle, and size it by the farthest real corner
+      // (a block shape's bounding box has empty corners, so this fits it tighter).
+      let sx = 0, sy = 0, sz = 0, nv = 0;
+      for (let x = 0; x < g.X; x++) for (let y = 0; y < g.Y; y++) for (let z = 0; z < g.Z; z++)
+        if (g.solid(x, y, z)) { sx += x + 0.5; sy += y + 0.5; sz += z + 0.5; nv++; }
+      this.ctr = [sx / nv, sy / nv, sz / nv];
+      let r2 = 0;
+      for (let x = 0; x < g.X; x++) for (let y = 0; y < g.Y; y++) for (let z = 0; z < g.Z; z++) {
+        if (!g.solid(x, y, z)) continue;
+        for (let k = 0; k < 8; k++) {
+          const dx = x + (k & 1) - this.ctr[0], dy = y + ((k >> 1) & 1) - this.ctr[1], dz = z + ((k >> 2) & 1) - this.ctr[2];
+          r2 = Math.max(r2, dx * dx + dy * dy + dz * dz);
+        }
+      }
+      this.radius = Math.sqrt(r2);
+      this.nodes.clear();
+      this.flying = [];
+      this.fx = [];
+      this.anims.clear();
+      this.R = START_ROT();
+      this.zoom.scale = 1;
+      this.hintId = -1; this.pressId = -1; this.flash = new Map();
+      applySkin(this.canvas);
+      this.refreshColors();
+      for (const id of board.alive) this.nodes.set(id, this.geometry(puzzle.arrows[id]));
+      this.applyView();
+    }
+    refreshColors() {
+      const cs = getComputedStyle(this.canvas);
+      const v = (k) => cs.getPropertyValue(k).trim();
+      this.col = {
+        board: hexToRgb(v('--board')), line: hexToRgb(v('--line')), dot: hexToRgb(v('--dot')),
+        arrows: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => hexToRgb(v('--a' + i))),
+        bad: hexToRgb(v('--bad')), gold: hexToRgb(v('--gold')), text: hexToRgb(v('--text')),
+      };
+      this.aw = parseFloat(v('--aw')) || 0.17;
+      const cls = this.canvas.getAttribute('class') || '';
+      this.outline = /\boutline-on\b/.test(cls);
+      this.onDark = /\bon-dark\b/.test(cls);
+      this.hc = document.body.classList.contains('hc');
+      this.outlineCol = this.col.arrows.map((c) => {
+        if (!this.onDark) return mixRgb(c, [0, 0, 0], 0.38);
+        const [L, C, H] = toOklch(c);
+        return fromOklch([Math.max(0.6, L - 0.2), C + 0.09, H]);
+      });
+      this.dirty = true; this.kick();
+    }
+    applyView() {
+      const r = this.canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      this.w = r.width; this.hgt = r.height;
+      this.canvas.width = Math.max(1, Math.round(r.width * dpr));
+      this.canvas.height = Math.max(1, Math.round(r.height * dpr));
+      this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      this.dirty = true; this.kick();
+    }
+    fit() { this.zoom.scale = 1; this.R = START_ROT(); this.dirty = true; this.kick(); }
+    zoomBy(f) { this.zoom.scale = Math.max(0.6, Math.min(2.6, this.zoom.scale * f)); this.dirty = true; this.kick(); }
+    panBy() {}
+    showOrder() {}
+    setSelected() {}
+    get busy() { return this.flying.length > 0; }
+
+    /* ---------------- geometry ---------------- */
+    u3(c) { return [c[0] / 2 - this.ctr[0], c[1] / 2 - this.ctr[1], c[2] / 2 - this.ctr[2]]; }
+    /** Path of an arrow as 3D points; tags[i] = the cell the segment ending at
+        point i lies on (-1 = in the air). Ends with its straight exit run. */
+    geometry(a) {
+      const g = this.g, pts = [], tags = [], D3 = SlipCube.DIRS;
+      for (let i = 0; i < a.cells.length; i++) {
+        const cell = g.cells[a.cells[i]];
+        if (i > 0) {
+          const prev = g.cells[a.cells[i - 1]];
+          const t = g.tangents(prev.id).find((tt) => g.step(prev.id, tt)[0] === cell.id);
+          const D = D3[t];
+          pts.push(this.u3([prev.c[0] + D[0], prev.c[1] + D[1], prev.c[2] + D[2]])); tags.push(prev.id);
+        }
+        pts.push(this.u3(cell.c)); tags.push(cell.id);
+      }
+      const headCell = g.cells[a.cells[a.cells.length - 1]];
+      const D = D3[a.dir];
+      const run = g.exitRun(headCell.id, a.dir) || { edge: 0.5 };
+      const hd = pts[pts.length - 1];
+      const edgeLen = run.edge;
+      pts.push([hd[0] + D[0] * edgeLen, hd[1] + D[1] * edgeLen, hd[2] + D[2] * edgeLen]); tags.push(headCell.id);
+      const far = this.radius * 2 + a.cells.length + 4;
+      pts.push([hd[0] + D[0] * (edgeLen + far), hd[1] + D[1] * (edgeLen + far), hd[2] + D[2] * (edgeLen + far)]); tags.push(-1);
+      const cum = [0];
+      for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1], pts[i][2] - pts[i - 1][2]));
+      return { a, pts, tags, cum, len: cum[cum.length - 3], edgeAt: cum[cum.length - 2], headCell: headCell.id, headN: headCell.n, D, normal: D3[headCell.n], off: 0 };
+    }
+    pointAt(geo, t) {
+      const { pts, cum } = geo;
+      if (t <= 0) return { p: pts[0], i: 1 };
+      for (let i = 1; i < pts.length; i++) {
+        if (t <= cum[i]) {
+          const f = (t - cum[i - 1]) / (cum[i] - cum[i - 1] || 1);
+          return { p: [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f, pts[i - 1][2] + (pts[i][2] - pts[i - 1][2]) * f], i };
+        }
+      }
+      return { p: pts[pts.length - 1], i: pts.length - 1 };
+    }
+    camera() {
+      const r = this.radius;
+      const D = r * 3.0;
+      const k = D / (D - r);
+      const S = (Math.min(this.w, this.hgt) * 0.47 / (0.95 * r * k)) * this.zoom.scale;
+      return { D, S, cx: this.w / 2, cy: this.hgt / 2 };
+    }
+    project(p, cam) {
+      const q = apply(this.R, p);
+      const k = cam.D / (cam.D - q[2]);
+      return [cam.cx + q[0] * k * cam.S, cam.cy - q[1] * k * cam.S, k];
+    }
+    /** Does this cell face the camera? (Being hidden behind other blocks is handled by draw order.) */
+    cellVisible(id, cam) {
+      const cell = this.g.cells[id];
+      const n = apply(this.R, SlipCube.DIRS[cell.n]);
+      const c = apply(this.R, this.u3(cell.c));
+      return n[0] * -c[0] + n[1] * -c[1] + n[2] * (cam.D - c[2]) > 0.02;
+    }
+
+    /* ---------------- drawing ---------------- */
+    kick() { if (!this.raf) this.raf = requestAnimationFrame(this.loop); }
+    loop(now) {
+      this.raf = 0;
+      for (const fn of Array.from(this.anims)) { let keep = false; try { keep = fn(now); } catch (e) { keep = false; } if (!keep) this.anims.delete(fn); }
+      if (this.spin && !this.pointers.size) {
+        this.rotate(this.spin.dx, this.spin.dy);
+        this.spin.dx *= 0.92; this.spin.dy *= 0.92;
+        if (Math.abs(this.spin.dx) + Math.abs(this.spin.dy) < 0.15) this.spin = null;
+      }
+      if (this.dirty || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.draw(now);
+      if (this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.raf = requestAnimationFrame(this.loop);
+    }
+    rotate(dx, dy) {
+      this.R = matMul(matMul(rotY(dx * 0.009), rotX(dy * 0.009)), this.R);
+      this.dirty = true;
+    }
+    draw(now) {
+      const ctx = this.ctx, cam = this.camera(), g = this.g, D3 = SlipCube.DIRS;
+      this.dirty = false;
+      ctx.clearRect(0, 0, this.w, this.hgt);
+      const vis = new Uint8Array(g.cells.length);
+      const order = [];
+      for (const cell of g.cells) {
+        if (!this.cellVisible(cell.id, cam)) continue;
+        vis[cell.id] = 1;
+        order.push({ id: cell.id, z: apply(this.R, this.u3(cell.c))[2] });
+      }
+      order.sort((a, b) => a.z - b.z); // far → near
+      this.vis = vis;
+      // Soft shadow under the shape.
+      const r = this.radius;
+      const shx = cam.cx, shy = cam.cy + r * 1.02 * cam.S, shr = r * 0.95 * cam.S;
+      const grd = ctx.createRadialGradient(shx, shy, 0, shx, shy, shr);
+      grd.addColorStop(0, this.onDark ? 'rgba(0,0,0,0.32)' : 'rgba(30,40,110,0.13)');
+      grd.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.save(); ctx.translate(shx, shy); ctx.scale(1, 0.26); ctx.translate(-shx, -shy);
+      ctx.fillStyle = grd; ctx.beginPath(); ctx.arc(shx, shy, shr, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      // What sits on each cell: pieces of resting arrows (drawn right after their cell).
+      const pulse = this.hintId >= 0 ? 0.5 + 0.5 * Math.sin(now / 140) : 0;
+      const bucket = new Map();
+      const put = (cid, item) => { if (!vis[cid]) return; let b = bucket.get(cid); if (!b) bucket.set(cid, (b = [])); b.push(item); };
+      for (const [id, geo] of this.nodes) {
+        let glow = null;
+        if (id === this.hintId) glow = { col: this.col.gold, a: 0.35 + 0.4 * pulse };
+        if (this.flash.has(id)) glow = { col: this.col.bad, a: 0.6 * this.flash.get(id)() };
+        if (id === this.pressId) glow = { col: this.col.text, a: 0.25 };
+        const off = geo.off || 0;
+        const runs = this.runs(geo, off, off + geo.len - HEAD_BACK);
+        // Pieces are drawn cell by cell. Where an arrow carries on flat into the
+        // next cell, its colour reaches a hair past the line so no seam shows.
+        const same = (m, n2) => m[0] === n2[0] && m[1] === n2[1] && m[2] === n2[2];
+        runs.forEach((run, i) => {
+          const extS = i > 0 && same(runs[i - 1].n, run.n), extE = i < runs.length - 1 && same(runs[i + 1].n, run.n);
+          put(run.tag, { geo, run, glow, tail: i === 0, ext: extS || extE ? [extS ? 0.03 : 0, extE ? 0.03 : 0] : null });
+        });
+        const head = this.headPoly(geo, off, cam);
+        put(head.tag >= 0 ? head.tag : geo.headCell, { geo, head, glow });
+      }
+      // Lighting per face direction
+      const L = norm3([-0.45, 0.75, 0.55]);
+      const shadeRgb = D3.map((n) => {
+        const lit = Math.max(0, dot3(apply(this.R, n), L));
+        return this.onDark ? mixRgb(this.col.board, [1, 1, 1], 0.04 + 0.08 * lit) : mixRgb(this.col.board, [0.16, 0.18, 0.4], 0.03 + 0.11 * (1 - lit));
+      });
+      const shadeFor = shadeRgb.map((c) => rgbToCss(c));
+      const edgeCol = rgbToCss(this.onDark ? mixRgb(this.col.line, [1, 1, 1], 0.08) : mixRgb(this.col.line, this.col.text, 0.25));
+      const dotCol = rgbToCss(this.col.dot);
+      const AX = [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]];
+      for (const { id } of order) {
+        const cell = g.cells[id];
+        const c = this.u3(cell.c);
+        const tans = g.tangents(id);
+        const U = AX[tans[0]], V = AX[tans[2]];
+        const corner = (su, sv) => this.project([c[0] + (U[0] * su + V[0] * sv) * 0.5, c[1] + (U[1] * su + V[1] * sv) * 0.5, c[2] + (U[2] * su + V[2] * sv) * 0.5], cam);
+        const q = [corner(-1, -1), corner(1, -1), corner(1, 1), corner(-1, 1)];
+        ctx.beginPath(); q.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]))); ctx.closePath();
+        ctx.fillStyle = shadeFor[cell.n]; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = shadeFor[cell.n]; ctx.stroke(); // hides hairline seams
+        // Block edges where the surface folds
+        const folds = g.folds[id];
+        ctx.lineWidth = this.onDark ? 1.4 : 1.8; ctx.strokeStyle = edgeCol; ctx.lineCap = 'round';
+        for (let i = 0; i < 4; i++) {
+          if (!folds[i]) continue;
+          const T = D3[tans[i]], P = i < 2 ? V : U;
+          const a1 = this.project([c[0] + T[0] * 0.5 + P[0] * 0.5, c[1] + T[1] * 0.5 + P[1] * 0.5, c[2] + T[2] * 0.5 + P[2] * 0.5], cam);
+          const a2 = this.project([c[0] + T[0] * 0.5 - P[0] * 0.5, c[1] + T[1] * 0.5 - P[1] * 0.5, c[2] + T[2] * 0.5 - P[2] * 0.5], cam);
+          ctx.beginPath(); ctx.moveTo(a1[0], a1[1]); ctx.lineTo(a2[0], a2[1]); ctx.stroke();
+        }
+        // The dot lies flat on the face too, so it narrows on a tilted face.
+        ctx.fillStyle = dotCol; ctx.beginPath();
+        for (let k = 0; k < 14; k++) {
+          const t = (k / 14) * Math.PI * 2, cu = Math.cos(t) * 0.075, sv = Math.sin(t) * 0.075;
+          const pp = this.project([c[0] + U[0] * cu + V[0] * sv, c[1] + U[1] * cu + V[1] * sv, c[2] + U[2] * cu + V[2] * sv], cam);
+          k ? ctx.lineTo(pp[0], pp[1]) : ctx.moveTo(pp[0], pp[1]);
+        }
+        ctx.closePath(); ctx.fill();
+        const items = bucket.get(id);
+        if (items) this.drawItems(items, cam, shadeRgb[cell.n]);
+      }
+      for (const fx of this.fx) if (fx.kind === 'ray') this.drawRay(fx, cam, now);
+      for (const fl of this.flying) {
+        this.drawTrail(fl, cam);
+        this.drawArrow(fl.geo, fl.off, cam, null, fl.alpha);
+      }
+      for (const fx of this.fx) if (fx.kind !== 'ray') this.drawFx(fx, cam, now);
+    }
+    /** Resting arrow pieces on one cell: glow, then outline, then colour. */
+    drawItems(items, cam, face) {
+      for (const pass of ['glow', 'outline', 'body']) {
+        for (const it of items) {
+          const a = it.geo.a, color = this.col.arrows[a.color % 8];
+          const cap = it.tail ? 'round' : 'butt';
+          if (pass === 'glow') {
+            if (!it.glow) continue;
+            // Solid colour (glow already blended onto this face), so pieces can overlap cleanly.
+            const gc = mixRgb(face, it.glow.col, Math.max(0, Math.min(1, it.glow.a)));
+            if (it.run) this.strokeRuns([it.run], cam, this.aw + 0.3, gc, 1, cap, true, it.ext && it.ext.map((e) => e / 2));
+            else this.fillHead(this.headPoly(it.geo, it.geo.off || 0, cam, 0.12), gc, 1, 0.1, cam, true);
+          } else if (pass === 'outline') {
+            if (!(this.outline || this.hc)) continue;
+            const oc = this.hc ? this.col.board : this.outlineCol[a.color % 8];
+            if (it.run) this.strokeRuns([it.run], cam, this.aw + (this.hc ? 0.14 : 0.09), oc, 1, cap, true, it.ext);
+            else this.fillHead(it.head, oc, 1, this.hc ? 0.14 : 0.1, cam, true);
+          } else if (it.run) this.strokeRuns([it.run], cam, this.aw, color, 1, cap, true, it.ext && it.ext.map((e) => e * 2));
+          else this.fillHead(it.head, color, 1, 0.06, cam, true);
+        }
+      }
+    }
+    /** Arrow bodies as flat strips lying on the faces (true perspective, so a
+        strip never spills off its own square on a tilted face). All the strips
+        go in one path, so overlapping pieces never double up or show seams. */
+    strokeRuns(runs, cam, width, color, alpha, cap, force, ext) {
+      const ctx = this.ctx, h = width / 2, round = (cap || 'round') === 'round';
+      ctx.beginPath();
+      let any = false;
+      const poly = (pts3) => {
+        const pr = pts3.map((p) => this.project(p, cam));
+        let area = 0;
+        for (let i = 0; i < pr.length; i++) { const q = pr[i], r2 = pr[(i + 1) % pr.length]; area += q[0] * r2[1] - r2[0] * q[1]; }
+        if (area < 0) pr.reverse();
+        pr.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])));
+        ctx.closePath(); any = true;
+      };
+      const disc = (c, n, e1) => {
+        const e2 = cross3(n, e1), out = [];
+        for (let k = 0; k < 18; k++) {
+          const t = (k / 18) * Math.PI * 2, co = Math.cos(t) * h, si = Math.sin(t) * h;
+          out.push([c[0] + e1[0] * co + e2[0] * si, c[1] + e1[1] * co + e2[1] * si, c[2] + e1[2] * co + e2[2] * si]);
+        }
+        poly(out);
+      };
+      runs.forEach((run, ri) => {
+        if (!force && run.tag >= 0 && !this.vis[run.tag]) return;
+        const P = run.pts, n = run.n;
+        if (P.length < 2) return;
+        let prevU = null;
+        for (let j = 0; j < P.length - 1; j++) {
+          let a = P[j], b = P[j + 1];
+          const L = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+          if (L < 1e-6) continue;
+          const u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L, (b[2] - a[2]) / L];
+          if (ext && j === 0 && ext[0]) a = [a[0] - u[0] * ext[0], a[1] - u[1] * ext[0], a[2] - u[2] * ext[0]];
+          if (ext && j === P.length - 2 && ext[1]) b = [b[0] + u[0] * ext[1], b[1] + u[1] * ext[1], b[2] + u[2] * ext[1]];
+          const sd = cross3(n, u), sx = [sd[0] * h, sd[1] * h, sd[2] * h];
+          poly([[a[0] + sx[0], a[1] + sx[1], a[2] + sx[2]], [b[0] + sx[0], b[1] + sx[1], b[2] + sx[2]], [b[0] - sx[0], b[1] - sx[1], b[2] - sx[2]], [a[0] - sx[0], a[1] - sx[1], a[2] - sx[2]]]);
+          if (prevU ? dot3(prevU, u) < 0.999 : (round && ri === 0)) disc(P[j], n, u); // rounded bend / tail
+          prevU = u;
+        }
+      });
+      if (!any) return;
+      ctx.fillStyle = rgbToCss(color, alpha);
+      ctx.fill('nonzero');
+    }
+    headPoly(geo, off, cam, grow) {
+      const t = off + geo.len;
+      const tipP = this.pointAt(geo, t + TIP).p, baseP = this.pointAt(geo, t - HEAD_BACK).p;
+      const dir = this.dirAt(geo, t);
+      const seg = this.pointAt(geo, t).i;
+      const tag = geo.tags[seg];
+      const fn = tag >= 0 ? SlipCube.DIRS[this.g.cells[tag].n] : geo.normal;
+      const side = norm3(cross3(fn, dir));
+      const hh = headHalf() + (grow || 0);
+      const pts = [tipP, [baseP[0] + side[0] * hh, baseP[1] + side[1] * hh, baseP[2] + side[2] * hh], [baseP[0] - side[0] * hh, baseP[1] - side[1] * hh, baseP[2] - side[2] * hh]];
+      return { tag, pr: pts.map((p) => this.project(p, cam)) };
+    }
+    fillHead(h, color, alpha, strokeW, cam, force) {
+      if (!force && h.tag >= 0 && !this.vis[h.tag]) return;
+      const ctx = this.ctx;
+      ctx.beginPath();
+      h.pr.forEach((q, i) => (i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1])));
+      ctx.closePath();
+      ctx.fillStyle = rgbToCss(color, alpha);
+      ctx.fill();
+      if (strokeW) { ctx.lineJoin = 'round'; ctx.lineWidth = strokeW * cam.S * h.pr[0][2]; ctx.strokeStyle = rgbToCss(color, alpha); ctx.stroke(); }
+    }
+    drawArrow(geo, off, cam, glow, alpha) {
+      const a = geo.a, color = this.col.arrows[a.color % 8];
+      const body = this.runs(geo, off, off + geo.len - HEAD_BACK);
+      const head = this.headPoly(geo, off, cam);
+      if (glow) {
+        this.strokeRuns(body, cam, this.aw + 0.3, glow.col, glow.a * alpha);
+        this.fillHead(this.headPoly(geo, off, cam, 0.12), glow.col, glow.a * alpha, 0.1, cam);
+      }
+      if (this.outline || this.hc) {
+        const oc = this.hc ? this.col.board : this.outlineCol[a.color % 8];
+        this.strokeRuns(body, cam, this.aw + (this.hc ? 0.14 : 0.09), oc, alpha);
+        this.fillHead(head, oc, alpha, this.hc ? 0.14 : 0.1, cam);
+      }
+      this.strokeRuns(body, cam, this.aw, color, alpha);
+      this.fillHead(head, color, alpha, 0.06, cam);
+    }
+    drawTrail(fl, cam) {
+      const tr = fl.trail, geo = fl.geo;
+      const from = Math.max(0, fl.off - tr.len);
+      if (fl.off <= 0.01) return;
+      if (tr.rainbow) {
+        const span = Math.min(fl.off, tr.len), w = span / RAINBOW.length;
+        RAINBOW.forEach((slot, i) => {
+          const t1 = fl.off - i * w, t0 = Math.max(0, t1 - w);
+          if (t1 - t0 > 0.01) this.strokeRuns(this.runs(geo, t0, t1), cam, this.aw, this.col.arrows[slot], tr.opacity * fl.fade);
+        });
+        return;
+      }
+      this.strokeRuns(this.runs(geo, from, fl.off), cam, this.aw * (tr.width || 0.7), this.col.arrows[geo.a.color % 8], tr.opacity * fl.fade);
+    }
+    drawRay(fx, cam) {
+      const ctx = this.ctx;
+      if (!this.vis[fx.cell]) return;
+      const a = this.project(fx.from, cam), b = this.project(fx.to, cam);
+      ctx.save();
+      ctx.setLineDash([Math.max(3, 0.18 * cam.S), Math.max(3, 0.14 * cam.S)]);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(2, 0.08 * cam.S * a[2]);
+      ctx.strokeStyle = rgbToCss(fx.bad ? this.col.bad : this.col.gold, fx.alpha == null ? 0.95 : fx.alpha);
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      ctx.restore();
+      if (fx.bad) {
+        const r = 0.13 * cam.S * b[2];
+        ctx.lineWidth = Math.max(2, 0.07 * cam.S * b[2]);
+        ctx.strokeStyle = rgbToCss(this.col.bad);
+        ctx.beginPath(); ctx.moveTo(b[0] - r, b[1] - r); ctx.lineTo(b[0] + r, b[1] + r); ctx.moveTo(b[0] + r, b[1] - r); ctx.lineTo(b[0] - r, b[1] + r); ctx.stroke();
+      }
+    }
+    drawFx(fx, cam) {
+      const ctx = this.ctx;
+      if (fx.kind === 'dot') {
+        const q = this.project(fx.p, cam);
+        ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(1, fx.r * cam.S * q[2]), 0, Math.PI * 2);
+        ctx.fillStyle = fx.white ? `rgba(255,255,255,${fx.a})` : rgbToCss(this.col.arrows[fx.color % 8], fx.a);
+        ctx.fill();
+      }
+    }
+
+    /* ---------------- play feedback ---------------- */
+    escape(id) {
+      const geo = this.nodes.get(id);
+      if (!geo) return;
+      this.nodes.delete(id);
+      if (this.hintId === id) this.hintId = -1;
+      if (reducedMotion()) {
+        const fl = { geo, off: 0, alpha: 1, fade: 0, trail: TRAILS.classic };
+        this.flying.push(fl);
+        const start = performance.now();
+        this.anims.add((now) => { fl.alpha = Math.max(0, 1 - (now - start) / 160); if (fl.alpha <= 0) { this.flying.splice(this.flying.indexOf(fl), 1); return false; } return true; });
+        this.kick();
+        return;
+      }
+      const tr = TRAILS[Save.data.progress.equip.trail] || TRAILS.classic;
+      const sp = escapeSpeed();
+      const edge = geo.edgeAt - geo.len;           // distance from head to the face edge
+      const total = geo.len + edge + EXIT_GLIDE_CELLS;
+      const dur = clamp(sp.baseMs + total * sp.perCellMs, sp.minMs, sp.maxMs);
+      const fadeFrom = geo.len + edge;
+      const fl = { geo, off: 0, alpha: 1, fade: 1, trail: tr };
+      this.flying.push(fl);
+      const start = performance.now();
+      let burst = false, lastSpark = 0;
+      this.anims.add((now) => {
+        const t = Math.min(1, (now - start) / dur);
+        const e = 1 - Math.pow(1 - t, sp.ease);
+        fl.off = total * e;
+        fl.fade = 1 - t;
+        fl.alpha = fl.off <= fadeFrom ? 1 : Math.max(0, 1 - (fl.off - fadeFrom) / EXIT_GLIDE_CELLS);
+        if (tr.sparkle && now - lastSpark > 32 && fl.off < fadeFrom) {
+          lastSpark = now;
+          const p = this.pointAt(geo, fl.off + Math.random() * 0.6).p;
+          this.particle([p[0] + (Math.random() - 0.5) * 0.3, p[1] + (Math.random() - 0.5) * 0.3, p[2] + (Math.random() - 0.5) * 0.3], [0, 0, 0], geo.a.color + Math.floor(Math.random() * 3), 0.05 + Math.random() * 0.05, 400, Math.random() < 0.35);
+        }
+        if (!burst && fl.off >= edge) {
+          burst = true;
+          const ep = geo.pts[geo.pts.length - 2];
+          const side = norm3(cross3(geo.normal, geo.D));
+          const n = tr.firework ? 22 : 7;
+          for (let i = 0; i < n; i++) {
+            const spread = (Math.random() - 0.5) * (tr.firework ? 4.2 : 1.6), speed = (tr.firework ? 0.6 : 1.2) + Math.random() * (tr.firework ? 2.6 : 1.6);
+            const up = tr.firework ? (Math.random() - 0.5) * 2 : 0;
+            const v = [geo.D[0] * speed + side[0] * spread + geo.normal[0] * up, geo.D[1] * speed + side[1] * spread + geo.normal[1] * up, geo.D[2] * speed + side[2] * spread + geo.normal[2] * up];
+            this.particle(ep.slice(), v, tr.firework ? geo.a.color + i : geo.a.color, (tr.firework ? 0.06 : 0.05) + Math.random() * 0.05, tr.firework ? 620 : 420, false);
+          }
+        }
+        if (t >= 1) { this.flying.splice(this.flying.indexOf(fl), 1); return false; }
+        return true;
+      });
+      this.kick();
+    }
+    particle(p, v, color, r, life, white) {
+      const fx = { kind: 'dot', p, color, r, a: 1, white };
+      this.fx.push(fx);
+      const start = performance.now(), p0 = p.slice();
+      this.anims.add((now) => {
+        const t = (now - start) / life;
+        fx.p = [p0[0] + v[0] * t * 0.6, p0[1] + v[1] * t * 0.6, p0[2] + v[2] * t * 0.6];
+        fx.a = Math.max(0, 1 - t);
+        if (t >= 1) { this.fx.splice(this.fx.indexOf(fx), 1); return false; }
+        return true;
+      });
+    }
+    rayFor(id, bad) {
+      const geo = this.nodes.get(id);
+      if (!geo) return null;
+      const hd = geo.pts[geo.pts.length - 3];
+      const D = geo.D;
+      const blocker = this.board.firstBlocker(id);
+      const steps = blocker ? blocker.steps - 0.28 : geo.edgeAt - geo.len;
+      const from = [hd[0] + D[0] * (TIP + 0.1), hd[1] + D[1] * (TIP + 0.1), hd[2] + D[2] * (TIP + 0.1)];
+      const to = [hd[0] + D[0] * steps, hd[1] + D[1] * steps, hd[2] + D[2] * steps];
+      return { kind: 'ray', cell: geo.headCell, from, to, bad: bad == null ? !!blocker : bad, blocker };
+    }
+    blocked(id, blocker) {
+      const geo = this.nodes.get(id);
+      if (!geo) return;
+      const ray = this.rayFor(id, true);
+      if (ray) this.fx.push(ray);
+      const start = performance.now();
+      const fl = this.flash;
+      fl.set(blocker.id, () => Math.max(0, 1 - (performance.now() - start) / 650));
+      const amp = reducedMotion() ? 0 : Math.min(0.45, blocker.steps - 0.6);
+      this.anims.add((now) => {
+        const k = (now - start) / 420;
+        geo.off = Math.max(0, amp * Math.sin(Math.PI * Math.min(1, k)) * (1 - 0.3 * k));
+        if (k >= 1) geo.off = 0;
+        if (now - start > 900) {
+          if (ray) { const i = this.fx.indexOf(ray); if (i >= 0) this.fx.splice(i, 1); }
+          fl.delete(blocker.id);
+          return false;
+        }
+        return true;
+      });
+      this.kick();
+    }
+    showHint(id) {
+      if (!this.nodes.has(id)) return;
+      this.hintId = id;
+      this.bringToFront(this.nodes.get(id).headN);
+      const ray = this.rayFor(id, false);
+      if (ray) this.fx.push(ray);
+      clearTimeout(this.hintTimer);
+      this.hintTimer = setTimeout(() => {
+        if (this.hintId === id) this.hintId = -1;
+        if (ray) { const i = this.fx.indexOf(ray); if (i >= 0) this.fx.splice(i, 1); }
+        this.dirty = true; this.kick();
+      }, 2600);
+      this.kick();
+    }
+    hitTest(clientX, clientY) {
+      if (!this.p) return null;
+      const r = this.canvas.getBoundingClientRect();
+      const cam = this.camera();
+      const sx = clientX - r.left, sy = clientY - r.top;
+      const dir = [(sx - cam.cx) / cam.S, -(sy - cam.cy) / cam.S, -cam.D];
+      const camP = [0, 0, cam.D];
+      const AX = [[1, 0, 0], [1, 0, 0], [0, 1, 0], [0, 1, 0], [0, 0, 1], [0, 0, 1]];
+      let best = null;
+      for (const cell of this.g.cells) {
+        if (!this.cellVisible(cell.id, cam)) continue;
+        const n = apply(this.R, SlipCube.DIRS[cell.n]), c3 = this.u3(cell.c), c = apply(this.R, c3);
+        const den = dot3(dir, n);
+        if (Math.abs(den) < 1e-6) continue;
+        const t = dot3([c[0] - camP[0], c[1] - camP[1], c[2] - camP[2]], n) / den;
+        if (t <= 0 || (best && t >= best.t)) continue;
+        const hit = applyT(this.R, [camP[0] + dir[0] * t, camP[1] + dir[1] * t, camP[2] + dir[2] * t]);
+        const tans = this.g.tangents(cell.id), U = AX[tans[0]], V = AX[tans[2]];
+        const du = dot3([hit[0] - c3[0], hit[1] - c3[1], hit[2] - c3[2]], U), dv = dot3([hit[0] - c3[0], hit[1] - c3[1], hit[2] - c3[2]], V);
+        if (Math.abs(du) > 0.52 || Math.abs(dv) > 0.52) continue;
+        best = { t, id: cell.id };
+      }
+      if (!best) return null;
+      const id = this.board.occ[best.id];
+      return id >= 0 && this.nodes.has(id) ? id : null;
+    }
+    runs(geo, t0, t1) {
+      const out = [];
+      const a = this.pointAt(geo, t0), b = this.pointAt(geo, t1);
+      const nOf = (tag) => (tag >= 0 ? SlipCube.DIRS[this.g.cells[tag].n] : geo.normal);
+      let cur = { tag: geo.tags[a.i], n: nOf(geo.tags[a.i]), pts: [a.p] };
+      for (let i = a.i; i < b.i; i++) {
+        cur.pts.push(geo.pts[i]);
+        if (geo.tags[i + 1] !== cur.tag) { out.push(cur); cur = { tag: geo.tags[i + 1], n: nOf(geo.tags[i + 1]), pts: [geo.pts[i]] }; }
+      }
+      cur.pts.push(b.p);
+      out.push(cur);
+      return out;
+    }
+    dirAt(geo, t) {
+      const a = this.pointAt(geo, t - 0.01), b = this.pointAt(geo, t + 0.01);
+      return norm3([b.p[0] - a.p[0], b.p[1] - a.p[1], b.p[2] - a.p[2]]);
+    }
+    showPress(id, on) {
+      this.fx = this.fx.filter((f) => !f.press);
+      this.pressId = -1;
+      if (on && this.nodes.has(id)) {
+        const ray = this.rayFor(id);
+        if (ray) { ray.press = true; this.fx.push(ray); }
+        this.pressId = id;
+        if (ray && ray.blocker) this.flash.set(ray.blocker.id, () => 0.8);
+      } else {
+        for (const [k, f] of this.flash) if (f() === 0.8) this.flash.delete(k);
+      }
+      this.dirty = true; this.kick();
+    }
+    /** Turn the shape so faces pointing this way look at the player (only if
+        they're turned away). Of the four upright views that do that, the one
+        closest to the current view is used. */
+    bringToFront(nIndex) {
+      const n = SlipCube.DIRS[nIndex];
+      if (apply(this.R, n)[2] > 0.3) return;
+      const base = START_ROT();
+      let best = null, bestScore = -Infinity;
+      for (const Q of CUBE_TURNS) {
+        const q = apply(Q, n);
+        if (q[2] !== 1) continue;
+        const cand = matMul(base, Q);
+        let tr = 0; for (let i = 0; i < 9; i++) tr += cand[i] * this.R[i];
+        if (tr > bestScore) { bestScore = tr; best = cand; }
+      }
+      if (!best) return;
+      const q0 = matToQuat(this.R), q1 = matToQuat(best);
+      if (reducedMotion()) { this.R = best; this.dirty = true; this.kick(); return; }
+      const start = performance.now(), dur = 520;
+      this.anims.add((now) => {
+        const t = Math.min(1, (now - start) / dur);
+        const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        this.R = quatToMat(slerp(q0, q1, e));
+        this.dirty = true;
+        return t < 1;
+      });
+      this.kick();
+    }
+    bindInput() {
+      const el = this.canvas;
+      el.addEventListener('pointerdown', (e) => {
+        if (!this.p) return;
+        el.setPointerCapture && el.setPointerCapture(e.pointerId);
+        this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        this.spin = null;
+        if (this.pointers.size === 1) {
+          this.tap = { x: e.clientX, y: e.clientY, t: performance.now(), moved: false, held: false, id: this.h.inputLocked() ? null : this.hitTest(e.clientX, e.clientY) };
+          clearTimeout(this.holdTimer);
+          if (this.tap.id != null && Save.data.settings.preview) {
+            this.holdTimer = setTimeout(() => { if (this.tap && !this.tap.moved) { this.tap.held = true; this.showPress(this.tap.id, true); } }, CUBE_HOLD_MS);
+          }
+        } else {
+          this.tap = null; clearTimeout(this.holdTimer); this.showPress(null, false);
+          const pts = [...this.pointers.values()];
+          this.pinch = { d: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) };
+        }
+      });
+      el.addEventListener('pointermove', (e) => {
+        const prev = this.pointers.get(e.pointerId);
+        if (!prev) return;
+        const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+        this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        this.lastMove = performance.now();
+        if (this.pointers.size === 2 && this.pinch) {
+          const pts = [...this.pointers.values()];
+          const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+          if (this.pinch.d > 0) this.zoomBy(d / this.pinch.d);
+          this.pinch.d = d;
+          return;
+        }
+        if (this.tap && !this.tap.moved && Math.hypot(e.clientX - this.tap.x, e.clientY - this.tap.y) > 8) {
+          this.tap.moved = true; clearTimeout(this.holdTimer);
+          if (this.tap.held) this.showPress(null, false);
+        }
+        if (!this.tap || this.tap.moved) {
+          this.rotate(dx, dy);
+          this.spin = { dx, dy };
+          this.kick();
+        }
+      });
+      const end = (e) => {
+        if (!this.pointers.has(e.pointerId)) return;
+        this.pointers.delete(e.pointerId);
+        clearTimeout(this.holdTimer);
+        if (this.pointers.size < 2) this.pinch = null;
+        const tap = this.tap;
+        this.tap = null;
+        if (this.spin && performance.now() - (this.lastMove || 0) > 70) this.spin = null; // finger had stopped: no fling
+        if (tap && tap.held) { this.showPress(null, false); return; }
+        if (tap && !tap.moved && e.type === 'pointerup' && tap.id != null && !this.h.inputLocked()) {
+          this.spin = null;
+          this.h.release(tap.id);
+        }
+        this.kick();
+      };
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+      el.addEventListener('wheel', (e) => { e.preventDefault(); this.zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1); }, { passive: false });
+      el.addEventListener('keydown', (e) => {
+        const k = { ArrowLeft: [-14, 0], ArrowRight: [14, 0], ArrowUp: [0, -14], ArrowDown: [0, 14] }[e.key];
+        if (k) { this.rotate(k[0], k[1]); this.kick(); e.preventDefault(); }
+      });
+    }
+  }
+
   class Input {
     /** `handler` supplies release(id) and inputLocked(); defaults to the main game. */
     constructor(view, svg, handler) {
@@ -1020,7 +1781,7 @@
   function newSession(mode, key, diff) {
     if (mode === 'campaign') diff = E.campaignLevelInfo(Number(key)).diff;
     if (mode === 'daily') diff = E.dailyInfo(key).diff;
-    return { mode, key: String(key), diff, gen: E.GENERATOR_VERSION, hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0 };
+    return { mode, key: String(key), diff, gen: genFor(key), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0 };
   }
   const counted = (sess) => sess.mode !== 'debug' && !sess.assisted;
   /* Hearts: Campaign and Daily allow three blocked taps. The third ends
@@ -1064,7 +1825,7 @@
       opts = opts || {};
       const act = Save.data.active;
       let sess;
-      const matches = act && !act.done && act.gen === E.GENERATOR_VERSION && act.mode === mode && String(act.key) === String(key) && (mode === 'campaign' || mode === 'daily' || act.diff === diff);
+      const matches = act && !act.done && act.gen === genFor(key) && act.mode === mode && String(act.key) === String(key) && (mode === 'campaign' || mode === 'daily' || act.diff === diff);
       if (matches && !opts.fresh) sess = act;
       else {
         sess = newSession(mode, key, diff);
@@ -1092,7 +1853,8 @@
         sess.removed = Array.from(new Set(valid));
         sess.total = puzzle.arrows.length;
         this.puzzle = puzzle;
-        this.board = new E.BoardState(puzzle, sess.removed);
+        this.useView(!!puzzle.cube);
+        this.board = puzzle.cube ? new SlipCube.BoardState(puzzle, sess.removed) : new E.BoardState(puzzle, sess.removed);
         this.view.load(puzzle, this.board);
         this.view.showOrder(this.showingOrder);
         loading.hidden = true;
@@ -1109,6 +1871,15 @@
       }, 16));
     },
 
+    /** Swap between the flat SVG board and the 3D cube canvas. */
+    useView(cube) {
+      if (!this.flatView) return;
+      this.view = cube ? this.cubeView : this.flatView;
+      $('#board').toggleAttribute('hidden', cube); // SVG elements need the attribute itself
+      $('#cube').hidden = !cube;
+      $('#board-wrap').classList.toggle('is-cube', cube);
+    },
+
     renderHeader() {
       renderHearts(this.session);
       const sess = this.session;
@@ -1118,7 +1889,7 @@
       let mode = '', name = '';
       if (sess.mode === 'campaign') { mode = 'Campaign'; name = 'Level ' + sess.key; }
       else if (sess.mode === 'daily') { mode = 'Daily Puzzle'; name = shortDate(sess.key); }
-      else if (sess.mode === 'zen') { mode = 'Zen'; name = 'Board ' + ((Save.data.zen.session.count || 0) + 1); }
+      else if (sess.mode === 'zen') { mode = isCubeKey(sess.key) ? 'Zen · 3D' : 'Zen'; name = 'Board ' + ((Save.data.zen.session.count || 0) + 1); }
       else { mode = 'Sandbox · not counted'; name = 'Seed ' + sess.key; }
       $('#game-mode').textContent = mode;
       $('#game-name').textContent = name;
@@ -1205,7 +1976,8 @@
       }
       this.view.showHint(id);
       const a = this.puzzle.arrows[id];
-      announce(`Hint: the arrow pointing ${E.DIR_NAMES[a.dir]} with its head at column ${a.cells[a.cells.length - 1][0] + 1}, row ${a.cells[a.cells.length - 1][1] + 1} can escape.`);
+      if (this.puzzle.cube) announce('Hint: the glowing arrow can escape.');
+      else announce(`Hint: the arrow pointing ${E.DIR_NAMES[a.dir]} with its head at column ${a.cells[a.cells.length - 1][0] + 1}, row ${a.cells[a.cells.length - 1][1] + 1} can escape.`);
       this.updateHud();
       Save.soon();
     },
@@ -1854,18 +2626,22 @@
     const box = $('#zen-choices');
     box.textContent = '';
     const z = Save.data.zen;
+    const cube = z.dim === '3d';
+    for (const b of $$('#zen-dim button')) { const on = b.dataset.dim === (cube ? '3d' : '2d'); b.classList.toggle('is-on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }
+    $('#zen-dim-note').hidden = !cube;
     for (const id of E.DIFFICULTY_ORDER) {
       const d = E.DIFFICULTIES[id];
-      box.append(h('button', { class: 'zen-choice', type: 'button', role: 'listitem', 'data-diff': id, 'aria-label': `Start Zen on ${d.label}. ${z.boards[id] || 0} boards cleared.` },
+      const n = SlipCube.CUBE[id] ? SlipCube.CUBE[id].N : 3;
+      box.append(h('button', { class: 'zen-choice', type: 'button', role: 'listitem', 'data-diff': id, 'aria-label': `Start Zen${cube ? ' 3D' : ''} on ${d.label}. ${z.boards[id] || 0} boards cleared.` },
         h('span', { class: 'diff-chip diff-' + id, text: d.label }),
-        h('p', { text: d.blurb }),
+        h('p', { text: cube ? `Cubes up to ${n}×${n}×${n} and block shapes of a similar size.` : d.blurb }),
         h('span', { class: 'zen-count' }, h('strong', { text: fmtNum(z.boards[id] || 0) }), h('span', { text: 'cleared' }))));
     }
     const act = Save.data.active;
     const cont = $('#zen-continue');
     if (act && act.mode === 'zen' && !act.done) {
       cont.hidden = false;
-      $('#zen-continue-title').textContent = `${diffLabel(act.diff)} · ${act.total ? act.total - act.removed.length + ' arrows left' : 'in progress'}`;
+      $('#zen-continue-title').textContent = `${isCubeKey(act.key) ? '3D · ' : ''}${diffLabel(act.diff)} · ${act.total ? act.total - act.removed.length + ' arrows left' : 'in progress'}`;
     } else cont.hidden = true;
   };
   $('#zen-choices').addEventListener('click', (e) => {
@@ -1878,13 +2654,23 @@
     const act = Save.data.active;
     if (act && act.mode === 'zen') Game.open('zen', act.key, act.diff);
   });
+  $('#zen-dim').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-dim]');
+    if (!b) return;
+    Sound.play('tap');
+    Save.data.zen.dim = b.dataset.dim;
+    Save.soon();
+    renderers.zen();
+  });
+  const zenPrefix = (cube) => (cube ? '3d.' : '');
   function startZen(diff) {
     Save.data.zen.session = { diff, count: 0 };
-    Game.open('zen', newZenSeed(), diff, { fresh: true });
+    Game.open('zen', zenPrefix(Save.data.zen.dim === '3d') + newZenSeed(), diff, { fresh: true });
   }
   function nextZen() {
     const diff = (Game.session && Game.session.diff) || Save.data.zen.session.diff || 'easy';
-    Game.open('zen', newZenSeed(), diff, { fresh: true });
+    const cube = Game.session ? isCubeKey(Game.session.key) : Save.data.zen.dim === '3d';
+    Game.open('zen', zenPrefix(cube) + newZenSeed(), diff, { fresh: true });
   }
 
   /* ---------------- Stats ---------------- */
@@ -2111,7 +2897,7 @@
     let kicker = '';
     if (sess.mode === 'campaign') kicker = `Level ${sess.key} · ${diffLabel(sess.diff)}`;
     else if (sess.mode === 'daily') kicker = `Daily · ${shortDate(sess.key)}`;
-    else if (sess.mode === 'zen') kicker = `Zen · ${diffLabel(sess.diff)}`;
+    else if (sess.mode === 'zen') kicker = `Zen${isCubeKey(sess.key) ? ' 3D' : ''} · ${diffLabel(sess.diff)}`;
     else kicker = 'Sandbox';
     $('#complete-kicker').textContent = kicker;
     $('#complete-title').textContent = res.perfect ? 'Perfect' : 'Cleared';
@@ -2256,6 +3042,7 @@
     refreshBoard() {
       applySettings();
       if (Game.view && Game.view.svg) applySkin(Game.view.svg);
+      if (Game.view && Game.view.refreshColors) Game.view.refreshColors();
       Save.soon();
     },
   };
@@ -2290,9 +3077,10 @@
     if (!p || !Game.board) return;
     if (kind === 'validate') {
       const t0 = performance.now();
-      const full = E.analyze(p);
-      const now = E.analyze(p, Game.session.removed);
-      const replay = E.verifySolution(p, p.solution);
+      const ENG = p.cube ? SlipCube : E;
+      const full = ENG.analyze(p);
+      const now = ENG.analyze(p, Game.session.removed);
+      const replay = ENG.verifySolution(p, p.solution);
       out.textContent = `Full board: ${full.solvable ? 'solvable' : 'NOT solvable'} (${full.depth} waves, ${full.initialFree} opening moves). ` +
         `From here: ${now.solvable ? 'solvable in ' + now.depth + ' more waves' : 'stuck'}. Stored solution replays: ${replay ? 'yes' : 'NO'}. ` +
         `${(performance.now() - t0).toFixed(1)} ms.`;
@@ -2442,6 +3230,7 @@
         pinch: '<path d="M7 7l-3-3M4 8V4h4M17 17l3 3M20 16v4h-4"/><circle cx="12" cy="12" r="2.2"/>',
         save: '<path d="M12 3v12M7 10l5 5 5-5M5 20h14"/>',
         coin: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/>',
+        cube: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
         path: '<path d="M4 12h8" /><path d="M14 12h2M19 12h1" stroke-dasharray="0" /><path d="M9 8l4 4-4 4" />',
       };
       const tips = [
@@ -2450,6 +3239,7 @@
         ['path', 'Not sure where an arrow goes? Press and hold it to see its path. Letting go won’t move it.'],
         ['star', 'Earn up to 3 stars: clear the board, clear it without hints, then clear it without a single blocked tap.'],
         ['coin', 'Every clear earns XP and coins. More stars and harder boards earn more. Spend coins on new arrow colors, boards and trails in the Style shop.'],
+        ['cube', 'Want a twist? In Zen, switch to the 3D cube. Drag to spin it; arrows wrap around its edges and fly off the side they point to.'],
         ['pinch', touchScreen() ? 'On big boards, use two fingers to zoom: spread them apart to zoom in, bring them together to zoom out. Drag with one finger to move around.' : 'On big boards, scroll to zoom in and out, and drag to move around.'],
         ['save', 'Your progress lives in this app. Removing the app deletes it, so make a backup in Settings first.'],
       ];
@@ -2818,10 +3608,12 @@
     HeroStream.init();
     Game.view = new BoardView($('#board'));
     new Input(Game.view, $('#board'));
+    Game.flatView = Game.view;
+    Game.cubeView = new CubeView($('#cube'), Game);
     HowTo.init();
     applySettings();
     // A board saved by an older generator can't be rebuilt identically; drop it.
-    if (Save.data.active && Save.data.active.gen !== E.GENERATOR_VERSION) Save.data.active = null;
+    if (Save.data.active && Save.data.active.gen !== genFor(Save.data.active.key)) Save.data.active = null;
     const a = Save.data.active;
     const brandNew = !Save.data.seenHowTo && Save.data.stats.played === 0 && !a;
     if (brandNew) showScreen('howto');
