@@ -1309,7 +1309,7 @@
             if (!(this.outline || this.hc)) continue;
             const oc = this.hc ? this.col.board : fade(stuck ? this.stuckOutline : this.outlineCol[a.color % 8]);
             if (it.run) this.strokeRuns([it.run], cam, this.aw + (this.hc ? 0.14 : 0.09), oc, 1, cap, true, it.ext);
-            else this.fillHead(it.head, oc, 1, this.hc ? 0.14 : 0.1, cam, true);
+            else this.fillHead(it.head, oc, 1, this.hc ? 0.2 : 0.15, cam, true);
           } else if (it.run) this.strokeRuns([it.run], cam, this.aw, color, 1, cap, true, it.ext && it.ext.map((e) => e * 2));
           else this.fillHead(it.head, color, 1, 0.06, cam, true);
         }
@@ -1393,7 +1393,7 @@
       if (this.outline || this.hc) {
         const oc = this.hc ? this.col.board : this.outlineCol[a.color % 8];
         this.strokeRuns(body, cam, this.aw + (this.hc ? 0.14 : 0.09), oc, alpha);
-        this.fillHead(head, oc, alpha, this.hc ? 0.14 : 0.1, cam);
+        this.fillHead(head, oc, alpha, this.hc ? 0.2 : 0.15, cam);
       }
       this.strokeRuns(body, cam, this.aw, color, alpha);
       this.fillHead(head, color, alpha, 0.06, cam);

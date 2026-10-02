@@ -757,7 +757,7 @@ kbd {
   stroke-linejoin: round;
   display: none;
 }
-.arrow .head-casing { fill: var(--board); stroke: var(--board); stroke-width: 0.12; stroke-linejoin: round; display: none; }
+.arrow .head-casing { fill: var(--board); stroke: var(--board); stroke-width: 0.2; stroke-linejoin: round; display: none; } /* 0.06 head stroke + 0.14, same ring as the body casing */
 .hc .arrow .casing, .hc .arrow .head-casing { display: inline; }
 .arrow .head { stroke-linejoin: round; stroke-width: 0.06; }
 .arrow .trail { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-width: calc(var(--aw) * 0.7); }
@@ -1082,7 +1082,7 @@ kbd {
    arrow's own color, so pale arrows stay easy to see. game.js adds
    .outline-on to the board and sets --c on every arrow. */
 .skin.outline-on .arrow .casing { display: inline; stroke: rgba(30, 30, 50, 0.45); stroke: color-mix(in oklab, var(--c) 62%, #000); stroke-width: calc(var(--aw) + 0.09); }
-.skin.outline-on .arrow .head-casing { display: inline; fill: rgba(30, 30, 50, 0.45); stroke: rgba(30, 30, 50, 0.45); fill: color-mix(in oklab, var(--c) 62%, #000); stroke: color-mix(in oklab, var(--c) 62%, #000); stroke-width: 0.1; }
+.skin.outline-on .arrow .head-casing { display: inline; fill: rgba(30, 30, 50, 0.45); stroke: rgba(30, 30, 50, 0.45); fill: color-mix(in oklab, var(--c) 62%, #000); stroke: color-mix(in oklab, var(--c) 62%, #000); stroke-width: 0.15; } /* 0.06 head stroke + 0.09, same ring as the body */
 
 /* Quick settings (gear on the puzzle screen) */
 .quick-sheet { padding-bottom: 18px; }
