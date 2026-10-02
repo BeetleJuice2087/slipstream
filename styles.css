@@ -1156,3 +1156,32 @@ kbd {
 .seg button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .seg button.is-on { background: var(--accent); color: var(--accent-ink); }
 .zen-dim-note { margin: -4px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+/* ---------- Daily coins pop-up ---------- */
+.gift-sheet { text-align: center; padding: 30px 24px 22px; width: min(360px, 100%); }
+.gift-medal {
+  width: 112px; height: 112px; margin: 0 auto 16px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 70%, #fff), var(--accent) 70%);
+  box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent) 14%, transparent), 0 14px 30px -10px color-mix(in srgb, var(--accent) 70%, transparent);
+  animation: giftSpin 0.9s cubic-bezier(.2,1.2,.4,1) both;
+}
+.gift-medal svg { width: 66px; height: 66px; filter: drop-shadow(0 3px 4px rgba(0,0,0,0.25)); }
+.gift-medal .c1 { fill: #ffd34d; stroke: #e0a10e; stroke-width: 3; }
+.gift-medal .c2 { fill: none; stroke: #e0a10e; stroke-width: 2.5; }
+.gift-medal .c3 { fill: none; stroke: #fff3b8; stroke-width: 3; stroke-linecap: round; }
+@keyframes giftSpin { 0% { transform: scale(0.4) rotateY(180deg); } 100% { transform: none; } }
+#gift-overlay.is-big .gift-medal { background: radial-gradient(circle at 35% 30%, #ffe28a, var(--gold) 70%); box-shadow: 0 0 0 12px color-mix(in srgb, var(--gold) 22%, transparent), 0 14px 34px -8px color-mix(in srgb, var(--gold) 80%, transparent); }
+.gift-kicker { margin: 0 0 4px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; font-size: 0.82rem; color: var(--accent); }
+#gift-overlay.is-big .gift-kicker { color: var(--gold); }
+.sheet h2.gift-amount { margin: 0 0 8px; font-size: 2rem; }
+.gift-text { margin: 0 auto; max-width: 28ch; color: var(--muted); line-height: 1.45; }
+.gift-pips { display: flex; justify-content: center; gap: 7px; margin: 16px 0 18px; }
+.gift-pips i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
+.gift-pips i:last-child { width: 13px; height: 13px; margin-top: -2px; }
+.gift-pips i.is-got { background: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.gift-pips i.is-today { background: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 30%, transparent); }
+.gift-ok { width: 100%; padding-block: 15px; font-size: 1.05rem; letter-spacing: 0.04em; }
+.coin-pill.is-bump { animation: giftPop 0.5s cubic-bezier(.3,1.6,.5,1); }
+@keyframes giftPop { 0% { transform: scale(0.8); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }
+.reduce-motion .gift-medal, .reduce-motion .coin-pill.is-bump { animation: none; }

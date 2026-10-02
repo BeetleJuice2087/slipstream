@@ -82,6 +82,7 @@
         xp: 0, coins: 0, coinsEarned: 0, migrated: false,
         owned: { arrows: ['classic'], board: ['default'], trail: ['classic'] },
         equip: { arrows: 'classic', board: 'default', trail: 'classic' },
+        login: { last: null, streak: 0, best: 0 }, // daily coins
       },
       milestones: {},   // id -> ISO date earned
     };
@@ -2274,6 +2275,8 @@
     })),
     { id: 'campaign-all', name: 'Campaign champion', desc: `Clear all ${E.CAMPAIGN_LENGTH} campaign levels`, coins: 500,
       progress: () => [E.CAMPAIGN_TIERS.reduce((a, tr) => a + tierDone(tr), 0), E.CAMPAIGN_LENGTH] },
+    { id: 'login-week', name: 'Regular', desc: 'Collect daily coins 7 days in a row', coins: 50,
+      progress: () => [Math.min(7, Save.data.progress.login.best || 0), 7] },
     { id: 'bonus-first', name: 'Third dimension', desc: 'Clear your first 3D bonus level', coins: 50,
       progress: () => [Math.min(1, bonusDone()), 1] },
     { id: 'bonus-all', name: 'Cube master', desc: `Clear all ${SlipCube.BONUS_COUNT} 3D bonus levels`, coins: 300,
@@ -2424,6 +2427,55 @@
 
   /* ---------------- Home ---------------- */
   const COIN_SVG = '<svg class="coin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /></svg>';
+  /* DAILY COINS: claim once a day from the home screen. Coming back on
+     consecutive days climbs a 7-day ladder; missing a day starts it over. */
+  const LOGIN_COINS = [5, 8, 10, 12, 15, 20, 40];
+  function loginState() {
+    const lg = Save.data.progress.login, today = dateKey();
+    if (lg.last === today) return { claimed: true, streak: lg.streak, day: ((lg.streak - 1) % 7) + 1 };
+    const streak = lg.last === addDays(today, -1) ? lg.streak + 1 : 1;
+    return { claimed: false, streak, day: ((streak - 1) % 7) + 1, reset: lg.streak > 0 && streak === 1 };
+  }
+  /** Pop-up on the home screen the first time you open the app each day.
+      The coins are added as it opens, so closing the app early never loses them. */
+  function showDailyGift() {
+    if (!Save.ok || !$('#gift-overlay').hidden) return;
+    const st = loginState();
+    if (st.claimed) return;
+    const lg = Save.data.progress.login;
+    lg.last = dateKey(); lg.streak = st.streak; lg.best = Math.max(lg.best || 0, st.streak);
+    const amt = LOGIN_COINS[st.day - 1];
+    grant(0, amt);
+    const ms = checkMilestones();
+    Save.write();
+    const ov = $('#gift-overlay');
+    $('#gift-day').textContent = `Day ${st.day}`;
+    $('#gift-amount').textContent = `+${amt} coins`;
+    const next = LOGIN_COINS[st.day % 7];
+    $('#gift-text').textContent = st.day === 7
+      ? `A full week! Tomorrow the ladder starts again at ${next}.`
+      : st.reset ? `Your streak started over. Come back tomorrow for ${next}.`
+      : `Your daily coins. Come back tomorrow for ${next}.`;
+    const pips = $('#gift-pips');
+    pips.textContent = '';
+    for (let d = 1; d <= 7; d++) pips.append(h('i', { class: d < st.day ? 'is-got' : d === st.day ? 'is-today' : '', title: `Day ${d}: ${LOGIN_COINS[d - 1]}` }));
+    ov.classList.toggle('is-big', st.day === 7);
+    ov.hidden = false;
+    Sound.play('daily');
+    announce(`Day ${st.day}. ${amt} coins added.`);
+    setTimeout(() => $('#gift-ok').focus(), 50);
+    ov._ms = ms;
+  }
+  function closeDailyGift() {
+    const ov = $('#gift-overlay');
+    if (ov.hidden) return;
+    ov.hidden = true;
+    renderPlayer();
+    const pill = $('#home-player .coin-pill');
+    pill.classList.remove('is-bump'); void pill.offsetWidth; pill.classList.add('is-bump');
+    const ms = ov._ms || [];
+    if (ms.length) toast(`🏆 Achievement unlocked: ${ms[0].name} · +${ms[0].coins} coins`, 3200);
+  }
   function renderPlayer() {
     const pr = Save.data.progress;
     const li = levelInfo(pr.xp);
@@ -2435,6 +2487,7 @@
   renderers.home = function () {
     HeroStream.start();
     renderPlayer();
+    setTimeout(() => { if (currentScreen === 'home') showDailyGift(); }, 450);
     const achN = MILESTONES.filter((m) => Save.data.milestones[m.id]).length;
     $('#home-ach-count').textContent = `${achN} / ${MILESTONES.length}`;
     const act = Save.data.active;
@@ -3689,6 +3742,10 @@
     settingsFromGame = false;
     showScreen('home');
   }));
+  $('#gift-ok').addEventListener('click', closeDailyGift);
+  $('#gift-overlay').addEventListener('click', (e) => { if (e.target.id === 'gift-overlay') closeDailyGift(); });
+  // A new day while the app sat open: the gift pops up when you come back to it.
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && currentScreen === 'home') showDailyGift(); });
   $('#home-continue').addEventListener('click', () => {
     const a = Save.data.active;
     if (a) { Sound.play('tap'); Game.open(a.mode, a.key, a.diff); }

@@ -459,6 +459,19 @@
     </div>
   </div>
 
+  <div class="overlay" id="gift-overlay" hidden>
+    <div class="sheet gift-sheet" role="dialog" aria-modal="true" aria-labelledby="gift-amount" aria-describedby="gift-text">
+      <div class="gift-medal" aria-hidden="true">
+        <svg viewBox="0 0 64 64"><circle class="c1" cx="32" cy="32" r="26" /><circle class="c2" cx="32" cy="32" r="18.5" /><path class="c3" d="M25 22.5 C29 19 37 19 40 24 M24 41 C29 45 37 45 40 40" /></svg>
+      </div>
+      <p class="gift-kicker" id="gift-day">Day 1</p>
+      <h2 class="gift-amount" id="gift-amount">+5 coins</h2>
+      <p class="gift-text" id="gift-text">Your daily coins. Come back tomorrow for more.</p>
+      <div class="gift-pips" id="gift-pips" aria-hidden="true"></div>
+      <button type="button" class="primary-btn gift-ok" id="gift-ok">Awesome!</button>
+    </div>
+  </div>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <div class="sr-only" id="live" aria-live="polite"></div>
 </div>
