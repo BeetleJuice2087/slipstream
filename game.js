@@ -62,7 +62,7 @@
   function defaultSave() {
     return {
       v: 1,
-      settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', colorblind: false, highContrast: false, preview: true, dev: false },
+      settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', colorblind: false, highContrast: false, preview: true, autoRelease: true, dev: false },
       campaign: { unlocked: 1, levels: {} },
       daily: { history: {}, longestStreak: 0 },
       zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [], dim: '2d' },
@@ -758,6 +758,16 @@
       return p;
     }
 
+    /** Red "waiting" look for a blocked arrow (auto-release). */
+    setStuck(id, on) {
+      const n = this.nodes.get(id);
+      if (!n) return;
+      const c = on ? 'var(--stuck)' : `var(--a${n.a.color})`;
+      n.g.style.setProperty('--c', c);
+      n.body.style.stroke = c; n.trail.style.stroke = c;
+      n.head.style.fill = c; n.head.style.stroke = c;
+      n.g.classList.toggle('is-stuck', on);
+    }
     showHint(id) {
       const node = this.nodes.get(id);
       if (!node) return;
@@ -1042,7 +1052,7 @@
       this.anims.clear();
       this.R = START_ROT();
       this.zoom.scale = 1;
-      this.hintId = -1; this.pressId = -1; this.flash = new Map();
+      this.hintId = -1; this.pressId = -1; this.flash = new Map(); this.stuck = new Set(); this.order = null;
       applySkin(this.canvas);
       this.refreshColors();
       for (const id of board.alive) this.nodes.set(id, this.geometry(puzzle.arrows[id]));
@@ -1055,17 +1065,20 @@
         board: hexToRgb(v('--board')), line: hexToRgb(v('--line')), dot: hexToRgb(v('--dot')),
         arrows: [0, 1, 2, 3, 4, 5, 6, 7].map((i) => hexToRgb(v('--a' + i))),
         bad: hexToRgb(v('--bad')), gold: hexToRgb(v('--gold')), text: hexToRgb(v('--text')),
+        stuck: hexToRgb(v('--stuck') || '#ff4f4f'),
       };
       this.aw = parseFloat(v('--aw')) || 0.17;
       const cls = this.canvas.getAttribute('class') || '';
       this.outline = /\boutline-on\b/.test(cls);
       this.onDark = /\bon-dark\b/.test(cls);
       this.hc = document.body.classList.contains('hc');
-      this.outlineCol = this.col.arrows.map((c) => {
+      const outlineOf = (c) => {
         if (!this.onDark) return mixRgb(c, [0, 0, 0], 0.38);
         const [L, C, H] = toOklch(c);
         return fromOklch([Math.max(0.6, L - 0.2), C + 0.09, H]);
-      });
+      };
+      this.outlineCol = this.col.arrows.map(outlineOf);
+      this.stuckOutline = outlineOf(this.col.stuck);
       this.dirty = true; this.kick();
     }
     applyView() {
@@ -1080,7 +1093,17 @@
     fit() { this.zoom.scale = 1; this.R = START_ROT(); this.dirty = true; this.kick(); }
     zoomBy(f) { this.zoom.scale = Math.max(0.6, Math.min(2.6, this.zoom.scale * f)); this.dirty = true; this.kick(); }
     panBy() {}
-    showOrder() {}
+    /** Debug: number each arrow's tail with its place in the stored solution. */
+    showOrder(on) {
+      this.order = null;
+      if (on && this.p) {
+        const m = new Map();
+        let n = 1;
+        for (const id of this.p.solution) { const geo = this.nodes.get(id); if (geo) m.set(geo.a.cells[0], n++); }
+        this.order = m;
+      }
+      this.dirty = true; this.kick();
+    }
     setSelected() {}
     get busy() { return this.flying.length > 0; }
 
@@ -1153,8 +1176,9 @@
         this.spin.dx *= 0.92; this.spin.dy *= 0.92;
         if (Math.abs(this.spin.dx) + Math.abs(this.spin.dy) < 0.15) this.spin = null;
       }
-      if (this.dirty || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.draw(now);
-      if (this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.raf = requestAnimationFrame(this.loop);
+      const pulsing = this.stuck && this.stuck.size > 0 && !reducedMotion();
+      if (this.dirty || pulsing || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.draw(now);
+      if (pulsing || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.raf = requestAnimationFrame(this.loop);
     }
     rotate(dx, dy) {
       this.R = matMul(matMul(rotY(dx * 0.009), rotX(dy * 0.009)), this.R);
@@ -1184,6 +1208,7 @@
       ctx.restore();
       // What sits on each cell: pieces of resting arrows (drawn right after their cell).
       const pulse = this.hintId >= 0 ? 0.5 + 0.5 * Math.sin(now / 140) : 0;
+      this.stuckFade = reducedMotion() ? 0 : 0.38 * (0.5 - 0.5 * Math.cos((now / 1300) * Math.PI * 2));
       const bucket = new Map();
       const put = (cid, item) => { if (!vis[cid]) return; let b = bucket.get(cid); if (!b) bucket.set(cid, (b = [])); b.push(item); };
       for (const [id, geo] of this.nodes) {
@@ -1243,6 +1268,13 @@
         ctx.closePath(); ctx.fill();
         const items = bucket.get(id);
         if (items) this.drawItems(items, cam, shadeRgb[cell.n]);
+        if (this.order && this.order.has(id)) {
+          const pc = this.project(c, cam), fs = Math.max(9, 0.36 * cam.S * pc[2]);
+          ctx.font = `800 ${fs}px Figtree, system-ui, sans-serif`;
+          ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
+          ctx.lineWidth = fs * 0.28; ctx.strokeStyle = rgbToCss(this.col.board); ctx.strokeText(String(this.order.get(id)), pc[0], pc[1]);
+          ctx.fillStyle = rgbToCss(this.col.text); ctx.fillText(String(this.order.get(id)), pc[0], pc[1]);
+        }
       }
       for (const fx of this.fx) if (fx.kind === 'ray') this.drawRay(fx, cam, now);
       for (const fl of this.flying) {
@@ -1255,7 +1287,9 @@
     drawItems(items, cam, face) {
       for (const pass of ['glow', 'outline', 'body']) {
         for (const it of items) {
-          const a = it.geo.a, color = this.col.arrows[a.color % 8];
+          const a = it.geo.a, stuck = this.stuck.has(a.id);
+          const fade = (c) => (stuck && this.stuckFade ? mixRgb(c, face, this.stuckFade) : c);
+          const color = fade(stuck ? this.col.stuck : this.col.arrows[a.color % 8]);
           const cap = it.tail ? 'round' : 'butt';
           if (pass === 'glow') {
             if (!it.glow) continue;
@@ -1265,7 +1299,7 @@
             else this.fillHead(this.headPoly(it.geo, it.geo.off || 0, cam, 0.12), gc, 1, 0.1, cam, true);
           } else if (pass === 'outline') {
             if (!(this.outline || this.hc)) continue;
-            const oc = this.hc ? this.col.board : this.outlineCol[a.color % 8];
+            const oc = this.hc ? this.col.board : fade(stuck ? this.stuckOutline : this.outlineCol[a.color % 8]);
             if (it.run) this.strokeRuns([it.run], cam, this.aw + (this.hc ? 0.14 : 0.09), oc, 1, cap, true, it.ext);
             else this.fillHead(it.head, oc, 1, this.hc ? 0.14 : 0.1, cam, true);
           } else if (it.run) this.strokeRuns([it.run], cam, this.aw, color, 1, cap, true, it.ext && it.ext.map((e) => e * 2));
@@ -1494,6 +1528,11 @@
         return true;
       });
       this.kick();
+    }
+    /** Red "waiting" look for a blocked arrow (auto-release). */
+    setStuck(id, on) {
+      if (on) this.stuck.add(id); else this.stuck.delete(id);
+      this.dirty = true; this.kick();
     }
     showHint(id) {
       if (!this.nodes.has(id)) return;
@@ -1781,7 +1820,7 @@
   function newSession(mode, key, diff) {
     if (mode === 'campaign') diff = E.campaignLevelInfo(Number(key)).diff;
     if (mode === 'daily') diff = E.dailyInfo(key).diff;
-    return { mode, key: String(key), diff, gen: genFor(key), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0 };
+    return { mode, key: String(key), diff, gen: genFor(key), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0, stuck: [] };
   }
   const counted = (sess) => sess.mode !== 'debug' && !sess.assisted;
   /* Hearts: Campaign and Daily allow three blocked taps. The third ends
@@ -1857,6 +1896,9 @@
         this.board = puzzle.cube ? new SlipCube.BoardState(puzzle, sess.removed) : new E.BoardState(puzzle, sess.removed);
         this.view.load(puzzle, this.board);
         this.view.showOrder(this.showingOrder);
+        sess.stuck = (sess.stuck || []).filter((id) => this.board.alive.has(id));
+        if (!Save.data.settings.autoRelease) sess.stuck = [];
+        for (const id of sess.stuck) this.view.setStuck(id, true);
         loading.hidden = true;
         this.combo = 0;
         this.renderHeader();
@@ -1890,7 +1932,7 @@
       if (sess.mode === 'campaign') { mode = 'Campaign'; name = 'Level ' + sess.key; }
       else if (sess.mode === 'daily') { mode = 'Daily Puzzle'; name = shortDate(sess.key); }
       else if (sess.mode === 'zen') { mode = isCubeKey(sess.key) ? 'Zen · 3D' : 'Zen'; name = 'Board ' + ((Save.data.zen.session.count || 0) + 1); }
-      else { mode = 'Sandbox · not counted'; name = 'Seed ' + sess.key; }
+      else { mode = isCubeKey(sess.key) ? 'Sandbox 3D · not counted' : 'Sandbox · not counted'; name = 'Seed ' + (isCubeKey(sess.key) ? String(sess.key).slice(3) : sess.key); }
       $('#game-mode').textContent = mode;
       $('#game-name').textContent = name;
       document.title = `${name} · Slipstream`;
@@ -1914,19 +1956,29 @@
       $('#btn-hint').disabled = !this.board || sess.done;
     },
 
-    release(id) {
+    release(id, auto) {
       const sess = this.session;
       if (!this.board || !sess || sess.done || !this.board.alive.has(id)) return;
       const st = Save.data.stats;
       const count = counted(sess);
-      sess.taps++;
-      if (count) st.taps++;
+      if (!sess.stuck) sess.stuck = [];
+      if (!auto) {
+        sess.taps++;
+        if (count) st.taps++;
+      }
       const blocker = this.board.firstBlocker(id);
       if (blocker) {
+        if (auto) return;
         sess.blocked++;
         if (count) st.blocked++;
         this.combo = 0;
         this.view.blocked(id, blocker);
+        // Auto-release: the arrow turns red and waits; it flies out by itself
+        // as soon as its way is clear.
+        if (Save.data.settings.autoRelease && !sess.stuck.includes(id)) {
+          sess.stuck.push(id);
+          this.view.setStuck(id, true);
+        }
         Sound.play('blocked');
         if (navigator.vibrate && !reducedMotion()) { try { navigator.vibrate(18); } catch (e) { /* ignore */ } }
         if (usesHearts(sess.mode) && !sess.assisted) {
@@ -1941,6 +1993,8 @@
           announce(`Blocked. ${sess.hearts} heart${sess.hearts === 1 ? '' : 's'} left.`);
         } else announce('Blocked. Another arrow is in the way.');
       } else {
+        const wasStuck = sess.stuck.indexOf(id);
+        if (wasStuck >= 0) { sess.stuck.splice(wasStuck, 1); this.view.setStuck(id, false); }
         this.board.remove(id);
         sess.removed.push(id);
         sess.success++;
@@ -1953,12 +2007,26 @@
         this.view.escape(id);
         Sound.play('escape', this.combo - 1);
         if (this.showingOrder) this.view.showOrder(true);
-        announce(this.board.count ? `Released. ${this.board.count} left.` : 'Board cleared.');
+        announce(this.board.count ? `${auto ? 'Waiting arrow flew out' : 'Released'}. ${this.board.count} left.` : 'Board cleared.');
         if (this.board.count === 0) this.finish();
+        else if (sess.stuck.length) this.queueWaiting();
       }
       this.updateHud();
       this.updateDebug();
       Save.soon();
+    },
+    /** Shortly after an arrow leaves, any red (waiting) arrow whose way is now
+        clear flies out by itself, which can set off a chain. */
+    queueWaiting() {
+      const sess = this.session, board = this.board;
+      clearTimeout(this.waitTimer);
+      this.waitTimer = setTimeout(() => {
+        if (this.session !== sess || this.board !== board || sess.done || !sess.stuck) return;
+        const free = sess.stuck.filter((id) => board.alive.has(id) && !board.firstBlocker(id));
+        free.forEach((id, i) => setTimeout(() => {
+          if (this.session === sess && this.board === board && !sess.done) this.release(id, true);
+        }, i * 110));
+      }, reducedMotion() ? 120 : 260);
     },
 
     hint() {
@@ -2063,8 +2131,8 @@
       const p = this.puzzle;
       const rows = [
         ['Seed', p.seed],
-        ['Difficulty', `${diffLabel(p.diff)} (t=${p.t.toFixed(2)})`],
-        ['Board', `${p.cols} × ${p.rows} · ${p.shape}`],
+        ['Difficulty', p.cube ? `${diffLabel(p.diff)} · 3D` : `${diffLabel(p.diff)} (t=${p.t.toFixed(2)})`],
+        ['Board', p.cube ? (() => { const g = SlipCube.geometryOf(p); return `${g.X} × ${g.Y} × ${g.Z} · ${p.shape === 'blocks' ? (p.boxes || []).length + ' blocks' : 'cube'} · ${g.cells.length} squares`; })() : `${p.cols} × ${p.rows} · ${p.shape}`],
         ["Arrows", `${p.arrows.length} · avg ${(p.arrows.reduce((t, a) => t + a.cells.length, 0) / p.arrows.length).toFixed(1)} cells`],
         ['Known solution', `${p.solution.length} moves`],
         ['Dependency depth', `${p.meta.depth} waves`],
@@ -2785,6 +2853,7 @@
     renderThickPreview();
     $('#set-contrast').checked = !!st.highContrast;
     $('#set-preview').checked = !!st.preview;
+    $('#set-auto').checked = !!st.autoRelease;
     $('#set-dev').checked = !!st.dev;
     $('#set-dev-row').hidden = !st.dev && versionTaps < 5;
   };
@@ -2814,6 +2883,7 @@
   });
   $('#set-contrast').addEventListener('change', (e) => { Save.data.settings.highContrast = e.target.checked; applySettings(); Save.soon(); });
   $('#set-preview').addEventListener('change', (e) => { Save.data.settings.preview = e.target.checked; Save.soon(); });
+  $('#set-auto').addEventListener('change', (e) => { setAutoRelease(e.target.checked); });
   $('#set-dev').addEventListener('change', (e) => { Save.data.settings.dev = e.target.checked; applySettings(); Save.soon(); });
   $('#version-tap').addEventListener('click', () => {
     versionTaps++;
@@ -3024,6 +3094,7 @@
       const st = Save.data.settings, pr = Save.data.progress;
       $('#q-sound').checked = !!st.sound;
       $('#q-preview').checked = !!st.preview;
+      $('#q-auto').checked = !!st.autoRelease;
       $('#q-cvd').checked = !!st.colorblind;
       $('#q-thick').value = THICKNESS[st.thickness] ? st.thickness : 'normal';
       $('#q-outline').value = ['auto', 'on', 'off'].includes(st.outline) ? st.outline : 'auto';
@@ -3053,6 +3124,17 @@
   $('#quick-overlay').addEventListener('click', (e) => { if (e.target.id === 'quick-overlay') Quick.close(); });
   $('#q-sound').addEventListener('change', (e) => { Save.data.settings.sound = e.target.checked; if (e.target.checked) { Sound.ensure(); Sound.play('hint'); } Save.soon(); });
   $('#q-preview').addEventListener('change', (e) => { Save.data.settings.preview = e.target.checked; Save.soon(); });
+  $('#q-auto').addEventListener('change', (e) => { setAutoRelease(e.target.checked); });
+  /** Turning auto-release off clears any red waiting arrows on the open board. */
+  function setAutoRelease(on) {
+    Save.data.settings.autoRelease = on;
+    const sess = Game.session;
+    if (!on && sess && sess.stuck) {
+      for (const id of sess.stuck) if (Game.view) Game.view.setStuck(id, false);
+      sess.stuck = [];
+    }
+    Save.soon();
+  }
   $('#q-thick').addEventListener('change', (e) => { Save.data.settings.thickness = e.target.value; Quick.refreshBoard(); });
   $('#q-outline').addEventListener('change', (e) => { Save.data.settings.outline = e.target.value; Quick.refreshBoard(); });
   $('#q-cvd').addEventListener('change', (e) => { Save.data.settings.colorblind = e.target.checked; Quick.refreshBoard(); });
@@ -3069,9 +3151,10 @@
     const p = Game.puzzle;
     if (kind === 'newseed') {
       const diff = (Game.session && Game.session.diff) || 'medium';
-      Game.open('debug', newZenSeed(), diff, { fresh: true });
+      const cube = !!(p && p.cube); // stay in 3D when you're on a 3D board
+      Game.open('debug', (cube ? '3d.' : '') + newZenSeed(), diff, { fresh: true });
       $('#debug-panel').hidden = false;
-      out.textContent = 'Generated a sandbox board. It does not affect stats.';
+      out.textContent = `Generated a ${cube ? '3D ' : ''}sandbox board. It does not affect stats.`;
       return;
     }
     if (!p || !Game.board) return;

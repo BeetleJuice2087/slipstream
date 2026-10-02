@@ -766,6 +766,12 @@ kbd {
   35% { stroke-width: calc(var(--aw) + 0.14); }
 }
 .arrow.is-pressed .body { stroke-width: calc(var(--aw) + 0.05); }
+/* Waiting (auto-release): a blocked arrow turns red and gently pulses until its way is clear. */
+.skin { --stuck: #e0262a; }
+.skin.on-dark { --stuck: #ff4f4f; }
+.arrow.is-stuck { animation: stuckPulse 1.3s ease-in-out infinite; }
+@keyframes stuckPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.62; } }
+.reduce-motion .arrow.is-stuck { animation: none; }
 .ray { fill: none; stroke-width: 0.07; stroke-linecap: round; stroke-dasharray: 0.08 0.16; }
 .ray-blocked { stroke: var(--bad); }
 .ray-clear { stroke: var(--gold); }

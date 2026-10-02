@@ -299,6 +299,10 @@
           <span class="setting-text"><span class="setting-name">Show path when holding</span><span class="setting-sub">Press and hold an arrow to see where it will go. Letting go won’t release it.</span></span>
           <input type="checkbox" class="switch" id="set-preview">
         </label>
+        <label class="setting">
+          <span class="setting-text"><span class="setting-name">Auto-release blocked arrows</span><span class="setting-sub">A blocked arrow turns red and flies out by itself once its way is clear. The blocked tap still counts.</span></span>
+          <input type="checkbox" class="switch" id="set-auto">
+        </label>
         <label class="setting" id="set-dev-row" hidden>
           <span class="setting-text"><span class="setting-name">Developer tools</span><span class="setting-sub">Seed, generator data and solver buttons in game</span></span>
           <input type="checkbox" class="switch" id="set-dev">
@@ -435,6 +439,7 @@
         <label class="setting"><span class="setting-text"><span class="setting-name">Arrow colors</span></span><select id="q-arrows" class="select"></select></label>
         <label class="setting"><span class="setting-text"><span class="setting-name">Board</span></span><select id="q-board" class="select"></select></label>
         <label class="setting"><span class="setting-text"><span class="setting-name">Show path when holding</span></span><input type="checkbox" class="switch" id="q-preview"></label>
+        <label class="setting"><span class="setting-text"><span class="setting-name">Auto-release blocked arrows</span></span><input type="checkbox" class="switch" id="q-auto"></label>
       </div>
       <div class="sheet-actions">
         <button type="button" class="ghost-btn" id="quick-all">All settings</button>
