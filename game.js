@@ -3380,7 +3380,11 @@
       this.view = new BoardView($('#howto-board'));
       new Input(this.view, $('#howto-board'), this);
       $('#howto-next').addEventListener('click', () => this.next());
-      $('#howto-skip').addEventListener('click', () => this.finish());
+      // Skip jumps past the practice boards to the "Good to know" tips.
+      $('#howto-skip').addEventListener('click', () => {
+        const tipsAt = HOWTO_STEPS.findIndex((st) => st.tips);
+        if (tipsAt >= 0 && this.step < tipsAt) this.show(tipsAt); else this.finish();
+      });
     },
     open() {
       Save.data.seenHowTo = true;
