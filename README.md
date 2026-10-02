@@ -52,3 +52,19 @@ Progress is stored on each device, inside the installed app.
 - Level complete: "New Level Unlocked" by Universfield, Pixabay Content License (free to use, credit optional).
 - The `sounds/` folder holds the trimmed source mp3s; the game uses the copies embedded in `sounds.js`,
   so `sounds/` doesn't need to be uploaded.
+
+## Zen 3D cube
+- Zen has a 2D / 3D switch. 3D boards are an N×N×N cube (Easy 3 … Impossible 9).
+- Arrows lie on the cube's faces and can bend around its edges. A released arrow slides along its
+  path and flies straight off the edge of the face its head is on; only arrows in that straight run
+  can block it, so the same exact solver (remove every free arrow, repeat) proves each cube solvable.
+- `cube.js` is the cube generator/solver (works in Node for testing); the 3D renderer is `CubeView`
+  in `game.js` (canvas, hand-written rotation + perspective, no 3D library).
+- 3D boards are plain cubes or random block shapes (L, T, towers, stacked blocks); Perlin outlines are 2D only.
+
+## Campaign 3D bonus levels
+- After every 10th campaign level (10, 20 … 150) there is an optional 3D bonus level: 15 in all.
+  Bonus k unlocks when level 10k is cleared. They use hearts and stars like campaign levels but
+  never block the main path. Progress is saved in `campaign.bonus`.
+- The 15 boards are stored as finished data in `cube.js` (`BONUS`), not re-generated, so they stay
+  the same even if the Zen 3D generator changes. `bonusCube(k)` checks the shape still matches.

@@ -438,6 +438,16 @@ kbd {
 .tier-stars { color: var(--gold); }
 .level:disabled { cursor: default; opacity: 0.45; background: transparent; border-style: dashed; }
 .level:disabled .level-num { font-size: 0.9rem; font-weight: 500; }
+/* 3D bonus tiles (one after every 10th level) */
+.level-bonus {
+  background: linear-gradient(150deg, color-mix(in srgb, var(--accent) 22%, var(--surface)), var(--surface) 70%);
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+.level-bonus .level-num svg { width: 24px; height: 24px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linejoin: round; display: block; }
+.level-bonus .bonus-tag { margin-top: 4px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; color: var(--accent); }
+.level-bonus.is-new { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+.level-bonus:disabled .level-num svg { stroke: var(--faint); width: 20px; height: 20px; }
+.level-bonus:disabled .bonus-tag { color: var(--faint); }
 .tier-easy { --tier-color: var(--a3); }
 .tier-medium { --tier-color: var(--a1); }
 .tier-hard { --tier-color: var(--a0); }

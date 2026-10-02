@@ -63,7 +63,7 @@
     return {
       v: 1,
       settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', colorblind: false, highContrast: false, preview: true, autoRelease: true, dev: false },
-      campaign: { unlocked: 1, levels: {} },
+      campaign: { unlocked: 1, levels: {}, bonus: {} },
       daily: { history: {}, longestStreak: 0 },
       zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [], dim: '2d' },
       stats: {
@@ -337,12 +337,19 @@
   /** Zen 3D boards are stored with a "3d." prefix on their seed. */
   const isCubeKey = (key) => String(key).startsWith('3d.');
   /** Which generator built a board; a saved board from another version is dropped. */
+  /* 3D bonus levels: bonus k unlocks when campaign level 10k is cleared.
+     They are optional extras and never block the main campaign. */
+  const bonusAfter = (k) => k * SlipCube.BONUS_AFTER;
+  const bonusUnlocked = (k) => { const r = Save.data.campaign.levels[bonusAfter(k)]; return !!(r && r.completed); };
+  const levelStore = (mode) => (mode === 'bonus' ? Save.data.campaign.bonus : Save.data.campaign.levels);
+  const bonusDone = () => { const b = Save.data.campaign.bonus; let n = 0; for (const k in b) if (b[k].completed) n++; return n; };
   const genFor = (key) => (isCubeKey(key) ? E.GENERATOR_VERSION + '+' + SlipCube.CUBE_VERSION : E.GENERATOR_VERSION);
   function puzzleFor(sess) {
     const key = `${sess.mode}|${sess.key}|${sess.diff}`;
     if (puzzleCache.has(key)) return puzzleCache.get(key);
     let p;
     if (sess.mode === 'campaign') p = E.campaignPuzzle(Number(sess.key));
+    else if (sess.mode === 'bonus') p = SlipCube.bonusCube(Number(sess.key));
     else if (sess.mode === 'daily') p = E.dailyPuzzle(sess.key);
     else if (isCubeKey(sess.key)) p = SlipCube.zenCube(String(sess.key).slice(3), sess.diff);
     else p = E.zenPuzzle(sess.key, sess.diff);
@@ -1819,6 +1826,7 @@
      ====================================================================== */
   function newSession(mode, key, diff) {
     if (mode === 'campaign') diff = E.campaignLevelInfo(Number(key)).diff;
+    if (mode === 'bonus') diff = SlipCube.bonusCube(Number(key)).diff;
     if (mode === 'daily') diff = E.dailyInfo(key).diff;
     return { mode, key: String(key), diff, gen: genFor(key), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0, stuck: [] };
   }
@@ -1826,7 +1834,7 @@
   /* Hearts: Campaign and Daily allow three blocked taps. The third ends
      the run and the board resets. Zen and the sandbox have no limit. */
   const MAX_HEARTS = 3;
-  function usesHearts(mode) { return mode === 'campaign' || mode === 'daily'; }
+  function usesHearts(mode) { return mode === 'campaign' || mode === 'bonus' || mode === 'daily'; }
   const HEART_PATH = 'M12 20.5s-7.3-4.5-9.3-9C1.3 8.3 3.3 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.6 0 5.6 3.8 4.2 7-2 4.5-9.3 9-9.3 9z';
   function renderHearts(sess, lostIndex) {
     const box = $('#game-hearts');
@@ -1864,7 +1872,7 @@
       opts = opts || {};
       const act = Save.data.active;
       let sess;
-      const matches = act && !act.done && act.gen === genFor(key) && act.mode === mode && String(act.key) === String(key) && (mode === 'campaign' || mode === 'daily' || act.diff === diff);
+      const matches = act && !act.done && act.gen === genFor(key) && act.mode === mode && String(act.key) === String(key) && (mode === 'campaign' || mode === 'bonus' || mode === 'daily' || act.diff === diff);
       if (matches && !opts.fresh) sess = act;
       else {
         sess = newSession(mode, key, diff);
@@ -1906,7 +1914,10 @@
         this.updateDebug();
         Save.write();
         if (this.board.count === 0) this.finish();
-        if (usesHearts(sess.mode) && !Save.data.seenHeartsTip) {
+        if (sess.mode === 'bonus' && !Save.data.seenBonusTip) {
+          Save.data.seenBonusTip = true;
+          toast('3D bonus! Drag to spin the shape. Arrows bend over edges and fly off the way they point.', 6000);
+        } else if (usesHearts(sess.mode) && !Save.data.seenHeartsTip) {
           Save.data.seenHeartsTip = true;
           toast('You have 3 hearts. Each blocked tap costs one.');
         }
@@ -1930,6 +1941,7 @@
       chip.className = 'diff-chip diff-' + sess.diff;
       let mode = '', name = '';
       if (sess.mode === 'campaign') { mode = 'Campaign'; name = 'Level ' + sess.key; }
+      else if (sess.mode === 'bonus') { mode = 'Campaign · 3D bonus'; name = 'Bonus ' + sess.key; }
       else if (sess.mode === 'daily') { mode = 'Daily Puzzle'; name = shortDate(sess.key); }
       else if (sess.mode === 'zen') { mode = isCubeKey(sess.key) ? 'Zen · 3D' : 'Zen'; name = 'Board ' + ((Save.data.zen.session.count || 0) + 1); }
       else { mode = isCubeKey(sess.key) ? 'Sandbox 3D · not counted' : 'Sandbox · not counted'; name = 'Seed ' + (isCubeKey(sess.key) ? String(sess.key).slice(3) : sess.key); }
@@ -2071,8 +2083,8 @@
         const st = Save.data.stats;
         st.failed = (st.failed || 0) + 1;
         st.perfectStreak = 0;
-        if (sess.mode === 'campaign') {
-          const lv = Save.data.campaign.levels;
+        if (sess.mode === 'campaign' || sess.mode === 'bonus') {
+          const lv = levelStore(sess.mode);
           lv[sess.key] = Object.assign({ plays: 1 }, lv[sess.key]);
           lv[sess.key].fails = (lv[sess.key].fails || 0) + 1;
         } else if (sess.mode === 'daily') {
@@ -2105,7 +2117,7 @@
       this.loadToken++;
       const mode = this.session ? this.session.mode : 'home';
       Save.write();
-      showScreen(mode === 'debug' ? 'home' : mode);
+      showScreen(mode === 'debug' ? 'home' : mode === 'bonus' ? 'campaign' : mode);
     },
 
     /* ---- developer tools ---- */
@@ -2157,8 +2169,8 @@
       const hist = Save.data.daily.history;
       hist[sess.key] = Object.assign({}, hist[sess.key], { attempted: true, diff: sess.diff });
     }
-    if (sess.mode === 'campaign') {
-      const lv = Save.data.campaign.levels;
+    if (sess.mode === 'campaign' || sess.mode === 'bonus') {
+      const lv = levelStore(sess.mode);
       lv[sess.key] = Object.assign({ plays: 0 }, lv[sess.key]);
       lv[sess.key].plays++;
     }
@@ -2216,6 +2228,7 @@
     if (mode === 'zen') { xp = Math.round(xp * 0.6); coins = Math.max(1, Math.round(coins * 0.6)); }
     if (replay) { xp = Math.max(1, Math.round(xp / 2)); coins = Math.max(1, Math.round(coins / 2)); }
     if (mode === 'daily' && !replay) { xp += 20; coins += 10; }
+    if (mode === 'bonus' && !replay) { xp += 15; coins += 5; }
     return { xp, coins };
   }
   /** Add XP/coins; pays the level-up bonus for every level gained. */
@@ -2261,6 +2274,10 @@
     })),
     { id: 'campaign-all', name: 'Campaign champion', desc: `Clear all ${E.CAMPAIGN_LENGTH} campaign levels`, coins: 500,
       progress: () => [E.CAMPAIGN_TIERS.reduce((a, tr) => a + tierDone(tr), 0), E.CAMPAIGN_LENGTH] },
+    { id: 'bonus-first', name: 'Third dimension', desc: 'Clear your first 3D bonus level', coins: 50,
+      progress: () => [Math.min(1, bonusDone()), 1] },
+    { id: 'bonus-all', name: 'Cube master', desc: `Clear all ${SlipCube.BONUS_COUNT} 3D bonus levels`, coins: 300,
+      progress: () => [bonusDone(), SlipCube.BONUS_COUNT] },
     { id: 'streak-7', name: 'Week streak', desc: 'Solve the Daily Puzzle 7 days in a row', coins: 50,
       progress: () => [Math.min(7, Math.max(Save.data.daily.longestStreak || 0, dailyStreaks().longest)), 7] },
     { id: 'streak-30', name: 'Month streak', desc: 'Solve the Daily Puzzle 30 days in a row', coins: 150,
@@ -2329,6 +2346,22 @@
         res.notes.push(`Level ${L + 1} unlocked`);
       }
       if (L === E.CAMPAIGN_LENGTH) res.notes.push('That was the final level. Campaign complete!');
+      if (L % SlipCube.BONUS_AFTER === 0 && L / SlipCube.BONUS_AFTER <= SlipCube.BONUS_COUNT && !rec.bonusNoted) {
+        rec.bonusNoted = true;
+        res.notes.push(`3D Bonus ${L / SlipCube.BONUS_AFTER} unlocked`);
+      }
+    } else if (sess.mode === 'bonus') {
+      const k = Number(sess.key);
+      const bl = Save.data.campaign.bonus;
+      const rec = Object.assign({ plays: 1 }, bl[k]);
+      res.replay = !!rec.completed;
+      if (rec.bestTime == null || sess.elapsed < rec.bestTime) { if (rec.completed) res.notes.push('New best time for this level'); rec.bestTime = sess.elapsed; }
+      rec.completed = true;
+      rec.perfect = !!rec.perfect || perfect;
+      if (rec.stars && res.stars > rec.stars) res.notes.push(`New best: ${res.stars} stars`);
+      rec.stars = Math.max(rec.stars || 0, res.stars);
+      rec.clears = (rec.clears || 0) + 1;
+      bl[k] = rec;
     } else if (sess.mode === 'daily') {
       const hist = Save.data.daily.history;
       const rec = Object.assign({ attempted: true }, hist[sess.key]);
@@ -2410,6 +2443,7 @@
       cont.hidden = false;
       let title = '';
       if (act.mode === 'campaign') title = `Level ${act.key} · ${diffLabel(act.diff)}`;
+      else if (act.mode === 'bonus') title = `3D Bonus ${act.key} · ${diffLabel(act.diff)}`;
       else if (act.mode === 'daily') title = act.key === dateKey() ? `Today's Daily · ${diffLabel(act.diff)}` : `Daily ${shortDate(act.key)}`;
       else title = `Zen · ${diffLabel(act.diff)}`;
       $('#home-continue-title').textContent = title;
@@ -2599,6 +2633,7 @@
           rec.completed ? starIcons(rec.stars || 1, 'tiny') : null);
         tierStars += rec.stars || 0;
         grid.append(btn);
+        if (L % SlipCube.BONUS_AFTER === 0 && L / SlipCube.BONUS_AFTER <= SlipCube.BONUS_COUNT) grid.append(bonusTile(L / SlipCube.BONUS_AFTER));
       }
       total += done;
       const count = tier.to - tier.from + 1;
@@ -2612,10 +2647,27 @@
     const next = wrap.querySelector('.is-next');
     if (next) requestAnimationFrame(() => next.scrollIntoView({ block: 'center', behavior: 'auto' }));
   };
+  /** A 3D bonus tile, shown right after every 10th level. */
+  function bonusTile(k) {
+    const rec = Save.data.campaign.bonus[k] || {};
+    const locked = !bonusUnlocked(k);
+    const diff = SlipCube.bonusCube(k).diff;
+    const cls = ['level', 'level-bonus', 'tier-' + diff];
+    if (rec.completed) cls.push('is-done');
+    if (rec.perfect) cls.push('is-perfect');
+    if (!locked && !rec.completed) cls.push('is-new');
+    const label = locked ? `3D bonus ${k}, unlocks after level ${bonusAfter(k)}`
+      : `3D bonus ${k}, ${diffLabel(diff)}${rec.completed ? `, ${rec.stars || 1} of 3 stars` : ''}`;
+    return h('button', { class: cls.join(' '), type: 'button', disabled: locked, 'aria-label': label, 'data-bonus': k,
+      title: locked ? `Clear level ${bonusAfter(k)} to unlock` : `3D bonus ${k}` },
+      h('span', { class: 'level-num', html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9"/></svg>' }),
+      rec.completed ? starIcons(rec.stars || 1, 'tiny') : h('span', { class: 'bonus-tag', text: '3D' }));
+  }
   $('#campaign-tiers').addEventListener('click', (e) => {
     const b = e.target.closest('.level');
     if (!b || b.disabled) return;
     Sound.play('tap');
+    if (b.dataset.bonus) { Game.open('bonus', Number(b.dataset.bonus)); return; }
     Game.open('campaign', Number(b.dataset.level));
   });
 
@@ -2811,7 +2863,8 @@
         row('Levels completed', `${campDone} / ${E.CAMPAIGN_LENGTH}`),
         ...E.CAMPAIGN_TIERS.map((t) => row(`${diffLabel(t.diff)} levels completed`, `${doneBy[t.diff] || 0} / ${t.to - t.from + 1}`)),
         row('Campaign perfect clears', `${perfectCamp.n}`),
-        row('Campaign stars', `★ ${campaignStars()} / ${E.CAMPAIGN_LENGTH * 3}`))));
+        row('Campaign stars', `★ ${campaignStars()} / ${E.CAMPAIGN_LENGTH * 3}`),
+        row('3D bonus levels completed', `${bonusDone()} / ${SlipCube.BONUS_COUNT}`))));
 
     body.append(section('Daily', h('div', { class: 'stat-rows' },
       row('Daily puzzles attempted', fmtNum(tot.attempted)),
@@ -2966,6 +3019,7 @@
     sheet.classList.toggle('is-perfect', res.perfect);
     let kicker = '';
     if (sess.mode === 'campaign') kicker = `Level ${sess.key} · ${diffLabel(sess.diff)}`;
+    else if (sess.mode === 'bonus') kicker = `3D Bonus ${sess.key} · ${diffLabel(sess.diff)}`;
     else if (sess.mode === 'daily') kicker = `Daily · ${shortDate(sess.key)}`;
     else if (sess.mode === 'zen') kicker = `Zen${isCubeKey(sess.key) ? ' 3D' : ''} · ${diffLabel(sess.diff)}`;
     else kicker = 'Sandbox';
@@ -3003,7 +3057,7 @@
     const btn = (label, cls, fn) => h('button', { class: cls, type: 'button', onclick: fn, text: label });
     clearTimeout(zenTimer);
     /* Fewer than 3 stars: offer a fresh run of the same board. */
-    const canRetry = res.counted && res.stars < MAX_STARS && (sess.mode === 'campaign' || sess.mode === 'daily');
+    const canRetry = res.counted && res.stars < MAX_STARS && (sess.mode === 'campaign' || sess.mode === 'bonus' || sess.mode === 'daily');
     if (canRetry) {
       acts.append(btn(`Try again for ${MAX_STARS} stars`, 'ghost-btn retry-btn', () => {
         ov.hidden = true;
@@ -3012,9 +3066,18 @@
     }
     if (sess.mode === 'campaign') {
       const L = Number(sess.key);
-      acts.append(btn('All levels', 'ghost-btn', () => showScreen('campaign')));
+      const bk = L / SlipCube.BONUS_AFTER;
+      if (Number.isInteger(bk) && bk <= SlipCube.BONUS_COUNT && !(Save.data.campaign.bonus[bk] || {}).completed)
+        acts.append(btn('Play 3D bonus', 'ghost-btn bonus-btn', () => { ov.hidden = true; Game.open('bonus', bk); }));
+      else acts.append(btn('All levels', 'ghost-btn', () => showScreen('campaign')));
       if (L < E.CAMPAIGN_LENGTH) acts.append(btn(`Level ${L + 1} →`, 'primary-btn', () => { ov.hidden = true; Game.open('campaign', L + 1); }));
       else acts.append(btn('Replay level', 'primary-btn', () => { ov.hidden = true; Game.open('campaign', L, null, { fresh: true }); }));
+    } else if (sess.mode === 'bonus') {
+      // Back to the main path: the level after the one this bonus follows.
+      const L = Math.min(E.CAMPAIGN_LENGTH, bonusAfter(Number(sess.key)) + 1);
+      acts.append(btn('All levels', 'ghost-btn', () => showScreen('campaign')));
+      if (L <= Save.data.campaign.unlocked && bonusAfter(Number(sess.key)) < E.CAMPAIGN_LENGTH) acts.append(btn(`Level ${L} →`, 'primary-btn', () => { ov.hidden = true; Game.open('campaign', L); }));
+      else acts.append(btn('Replay bonus', 'primary-btn', () => { ov.hidden = true; Game.open('bonus', sess.key, null, { fresh: true }); }));
     } else if (sess.mode === 'daily') {
       acts.append(btn('Home', 'ghost-btn', () => showScreen('home')));
       acts.append(btn('See calendar', 'primary-btn', () => showScreen('daily')));
@@ -3065,7 +3128,7 @@
     sheet.classList.add('is-failed');
     $('#complete-stars').hidden = true;
     $('.burst', ov).textContent = '';
-    $('#complete-kicker').textContent = sess.mode === 'campaign' ? `Level ${sess.key} · ${diffLabel(sess.diff)}` : `Daily · ${shortDate(sess.key)}`;
+    $('#complete-kicker').textContent = sess.mode === 'campaign' ? `Level ${sess.key} · ${diffLabel(sess.diff)}` : sess.mode === 'bonus' ? `3D Bonus ${sess.key} · ${diffLabel(sess.diff)}` : `Daily · ${shortDate(sess.key)}`;
     $('#complete-title').textContent = 'Out of hearts';
     $('#complete-note').textContent = 'Three blocked taps ends the run. The board resets when you try again.';
     const stats = $('#complete-stats');
@@ -3075,7 +3138,7 @@
     const acts = $('#complete-actions');
     acts.textContent = '';
     const btn = (label, cls, fn) => h('button', { class: cls, type: 'button', onclick: fn, text: label });
-    acts.append(sess.mode === 'campaign'
+    acts.append(sess.mode === 'campaign' || sess.mode === 'bonus'
       ? btn('All levels', 'ghost-btn', () => showScreen('campaign'))
       : btn('Home', 'ghost-btn', () => showScreen('home')));
     acts.append(btn('Try again', 'primary-btn', () => { ov.hidden = true; Game.open(sess.mode, sess.key, sess.diff, { fresh: true }); }));
