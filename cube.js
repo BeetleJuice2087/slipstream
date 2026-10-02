@@ -159,10 +159,10 @@
     easy:       { N: 3, len: [2, 4], turn: 0.35, minDepth: 3, cand: 4, plain: 0.35, shape: { cells: [50, 96], dim: [2, 3], boxes: [1, 2], maxExt: 7 } },
     medium:     { N: 4, len: [2, 6], turn: 0.4, minDepth: 5, cand: 6, plain: 0.3, shape: { cells: [90, 160], dim: [2, 4], boxes: [1, 3], maxExt: 9 } },
     hard:       { N: 5, len: [3, 8], turn: 0.45, minDepth: 7, cand: 8, plain: 0.25, shape: { cells: [150, 230], dim: [3, 4], boxes: [2, 3], maxExt: 10 } },
-    expert:     { N: 6, len: [3, 9], turn: 0.45, minDepth: 9, cand: 8, plain: 0.25, shape: { cells: [210, 300], dim: [3, 5], boxes: [2, 4], maxExt: 11 } },
-    nightmare:  { N: 7, len: [3, 10], turn: 0.5, minDepth: 10, cand: 8, plain: 0.25, shape: { cells: [280, 380], dim: [3, 5], boxes: [2, 4], maxExt: 12 } },
-    insane:     { N: 8, len: [3, 11], turn: 0.5, minDepth: 11, cand: 6, plain: 0.25, shape: { cells: [360, 460], dim: [4, 6], boxes: [2, 4], maxExt: 13 } },
-    impossible: { N: 9, len: [3, 12], turn: 0.5, minDepth: 12, cand: 6, plain: 0.25, shape: { cells: [440, 560], dim: [4, 6], boxes: [3, 5], maxExt: 14 } },
+    expert:     { N: 6, len: [3, 7], turn: 0.45, minDepth: 9, cand: 8, plain: 0.25, shape: { cells: [230, 320], dim: [3, 5], boxes: [2, 4], maxExt: 12 } },
+    nightmare:  { N: 7, len: [3, 8], turn: 0.5, minDepth: 10, cand: 8, plain: 0.25, shape: { cells: [310, 410], dim: [3, 5], boxes: [2, 4], maxExt: 13 } },
+    insane:     { N: 8, len: [3, 9], turn: 0.5, minDepth: 11, cand: 6, plain: 0.25, shape: { cells: [390, 500], dim: [4, 6], boxes: [2, 4], maxExt: 14 } },
+    impossible: { N: 9, len: [3, 10], turn: 0.5, minDepth: 12, cand: 6, plain: 0.25, shape: { cells: [470, 600], dim: [4, 6], boxes: [3, 5], maxExt: 15 } },
   };
 
   /* ------------------------------------------------------------------
@@ -496,7 +496,7 @@
     }
   }
 
-  const CUBE_VERSION = 'c2'; // c2: block shapes
+  const CUBE_VERSION = 'c3'; // c2: block shapes · c3: more, shorter arrows on Expert and up
   function generateCube({ seed, diff, plain, blocks }) {
     const started = Date.now();
     const P = CUBE[diff] || CUBE.easy;

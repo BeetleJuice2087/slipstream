@@ -344,7 +344,9 @@
   const bonusUnlocked = (k) => { const r = Save.data.campaign.levels[bonusAfter(k)]; return !!(r && r.completed); };
   const levelStore = (mode) => (mode === 'bonus' ? Save.data.campaign.bonus : Save.data.campaign.levels);
   const bonusDone = () => { const b = Save.data.campaign.bonus; let n = 0; for (const k in b) if (b[k].completed) n++; return n; };
-  const genFor = (key) => (isCubeKey(key) ? E.GENERATOR_VERSION + '+' + SlipCube.CUBE_VERSION : E.GENERATOR_VERSION);
+  // Which generator built a saved board. Zen 2D boards are also "tightened", so they have their own tag.
+  const genFor = (key, mode) => (isCubeKey(key) ? E.GENERATOR_VERSION + '+' + SlipCube.CUBE_VERSION
+    : (mode === 'zen' || mode === 'debug') ? E.GENERATOR_VERSION + '+' + E.ZEN_TIGHT_VERSION : E.GENERATOR_VERSION);
   function puzzleFor(sess) {
     const key = `${sess.mode}|${sess.key}|${sess.diff}`;
     if (puzzleCache.has(key)) return puzzleCache.get(key);
@@ -1829,7 +1831,7 @@
     if (mode === 'campaign') diff = E.campaignLevelInfo(Number(key)).diff;
     if (mode === 'bonus') diff = SlipCube.bonusCube(Number(key)).diff;
     if (mode === 'daily') diff = E.dailyInfo(key).diff;
-    return { mode, key: String(key), diff, gen: genFor(key), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0, stuck: [] };
+    return { mode, key: String(key), diff, gen: genFor(key, mode), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0, stuck: [] };
   }
   const counted = (sess) => sess.mode !== 'debug' && !sess.assisted;
   /* Hearts: Campaign and Daily allow three blocked taps. The third ends
@@ -1873,7 +1875,7 @@
       opts = opts || {};
       const act = Save.data.active;
       let sess;
-      const matches = act && !act.done && act.gen === genFor(key) && act.mode === mode && String(act.key) === String(key) && (mode === 'campaign' || mode === 'bonus' || mode === 'daily' || act.diff === diff);
+      const matches = act && !act.done && act.gen === genFor(key, mode) && act.mode === mode && String(act.key) === String(key) && (mode === 'campaign' || mode === 'bonus' || mode === 'daily' || act.diff === diff);
       if (matches && !opts.fresh) sess = act;
       else {
         sess = newSession(mode, key, diff);
@@ -2118,7 +2120,7 @@
       this.loadToken++;
       const mode = this.session ? this.session.mode : 'home';
       Save.write();
-      showScreen(mode === 'debug' ? 'home' : mode === 'bonus' ? 'campaign' : mode);
+      showScreen(mode === 'debug' ? (this.debugFrom || 'zen') : mode === 'bonus' ? 'campaign' : mode);
     },
 
     /* ---- developer tools ---- */
@@ -3268,6 +3270,8 @@
     if (kind === 'newseed') {
       const diff = (Game.session && Game.session.diff) || 'medium';
       const cube = !!(p && p.cube); // stay in 3D when you're on a 3D board
+      // Remember where the sandbox was started from, so Back returns there.
+      if (Game.session && Game.session.mode !== 'debug') Game.debugFrom = Game.session.mode === 'bonus' ? 'campaign' : Game.session.mode;
       Game.open('debug', (cube ? '3d.' : '') + newZenSeed(), diff, { fresh: true });
       $('#debug-panel').hidden = false;
       out.textContent = `Generated a ${cube ? '3D ' : ''}sandbox board. It does not affect stats.`;
@@ -3819,7 +3823,7 @@
     HowTo.init();
     applySettings();
     // A board saved by an older generator can't be rebuilt identically; drop it.
-    if (Save.data.active && Save.data.active.gen !== genFor(Save.data.active.key)) Save.data.active = null;
+    if (Save.data.active && Save.data.active.gen !== genFor(Save.data.active.key, Save.data.active.mode)) Save.data.active = null;
     const a = Save.data.active;
     const brandNew = !Save.data.seenHowTo && Save.data.stats.played === 0 && !a;
     if (brandNew) showScreen('howto');
