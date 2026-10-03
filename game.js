@@ -64,7 +64,8 @@
       v: 1,
       settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', colorblind: false, highContrast: false, preview: true, autoRelease: true, dev: false },
       campaign: { unlocked: 1, levels: {}, bonus: {} },
-      daily: { history: {}, longestStreak: 0 },
+      daily: { history: {}, longestStreak: 0, unlocked: {} }, // unlocked: past days bought with coins
+      startedOn: null, // first day this player opened the game
       zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [], dim: '2d' },
       stats: {
         played: 0, completed: 0, perfect: 0, playMs: 0,
@@ -308,9 +309,10 @@
     const hist = Save.data.daily.history;
     let current = 0;
     let d = dateKey();
-    if (!(hist[d] && hist[d].completed)) d = addDays(d, -1);
-    while (hist[d] && hist[d].completed) { current++; d = addDays(d, -1); }
-    const days = Object.keys(hist).filter((k) => hist[k].completed).sort();
+    const onTime = (r) => r && r.completed && !r.late; // past days played later never count
+    if (!onTime(hist[d])) d = addDays(d, -1);
+    while (onTime(hist[d])) { current++; d = addDays(d, -1); }
+    const days = Object.keys(hist).filter((k) => onTime(hist[k])).sort();
     let best = 0, run = 0, prev = null;
     for (const k of days) {
       run = prev && addDays(prev, 1) === k ? run + 1 : 1;
@@ -452,6 +454,8 @@
 
   const TIP = 0.36;      // how far the arrowhead tip reaches past the head cell centre
   const HEAD_BACK = 0.1; // where the arrowhead base sits behind the head cell centre
+  const HOOK_STEM = 0.2;  // turned heads: how far the elbow runs out the new way before the arrowhead
+  const HOOK_HEAD = 0.32; // turned heads: arrowhead length (a little shorter, so the tip stays near its square)
   /* Arrow thickness (Settings). The stroke width lives in CSS (--aw);
      the arrowhead grows a little with it so heads stay in proportion. */
   const THICKNESS = { thin: 0.9, normal: 1, thick: 1.14 };
@@ -520,7 +524,10 @@
       const ext = pts.concat([[hd[0] + E.DX[a.dir] * far, hd[1] + E.DY[a.dir] * far]]);
       const cum = [0];
       for (let i = 1; i < ext.length; i++) cum.push(cum[i - 1] + Math.abs(ext[i][0] - ext[i - 1][0]) + Math.abs(ext[i][1] - ext[i - 1][1]));
-      return { pts, ext, cum, len: pts.length - 1 };
+      // Does the head turn in its last square (it points a different way from its last step)?
+      const n = pts.length;
+      const hook = n > 1 && (pts[n - 1][0] - pts[n - 2][0] !== E.DX[a.dir] || pts[n - 1][1] - pts[n - 2][1] !== E.DY[a.dir]);
+      return { pts, ext, cum, len: pts.length - 1, hook };
     }
 
     createArrow(a) {
@@ -572,10 +579,16 @@
     /** Draw the arrow slid `off` units along its own path. */
     shape(node, off) {
       const geo = node.geo, dir = node.a.dir;
-      const bodyD = BoardView.pathD(this.windowPts(geo, off, off + geo.len - HEAD_BACK));
-      const tip = this.pointAt(geo, off + geo.len + TIP);
-      const base = this.pointAt(geo, off + geo.len - HEAD_BACK);
-      const hh = headHalf();
+      // A head that turns in its last square gets a short elbow: the body bends,
+      // runs a little way out the new direction, then the arrowhead. Without the
+      // elbow the body would meet the head from the side and look like a flag.
+      const hook = geo.hook;
+      const bodyEnd = off + geo.len + (hook ? HOOK_STEM : -HEAD_BACK);
+      const bodyD = BoardView.pathD(this.windowPts(geo, off, bodyEnd));
+      const tip = this.pointAt(geo, off + geo.len + (hook ? HOOK_STEM + HOOK_HEAD : TIP));
+      const back = hook ? HOOK_HEAD + 0.05 : TIP + HEAD_BACK;
+      const base = [tip[0] - E.DX[dir] * back, tip[1] - E.DY[dir] * back];
+      const hh = headHalf() * (hook ? 0.88 : 1);
       const px = -E.DY[dir] * hh, py = E.DX[dir] * hh;
       const headD = `M${tip[0].toFixed(3)} ${tip[1].toFixed(3)}L${(base[0] + px).toFixed(3)} ${(base[1] + py).toFixed(3)}L${(base[0] - px).toFixed(3)} ${(base[1] - py).toFixed(3)}Z`;
       node.body.setAttribute('d', bodyD);
@@ -584,6 +597,7 @@
       node.head.setAttribute('d', headD);
       node.headCasing.setAttribute('d', headD);
     }
+
 
     /* ---------------- animation loop ---------------- */
     addAnim(fn) {
@@ -1831,7 +1845,7 @@
     if (mode === 'campaign') diff = E.campaignLevelInfo(Number(key)).diff;
     if (mode === 'bonus') diff = SlipCube.bonusCube(Number(key)).diff;
     if (mode === 'daily') diff = E.dailyInfo(key).diff;
-    return { mode, key: String(key), diff, gen: genFor(key, mode), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0, stuck: [] };
+    return { mode, key: String(key), diff, gen: genFor(key, mode), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0, stuck: [], day: dateKey() };
   }
   const counted = (sess) => sess.mode !== 'debug' && !sess.assisted;
   /* Hearts: Campaign and Daily allow three blocked taps. The third ends
@@ -2198,6 +2212,8 @@
     for (const k in lv) if (lv[k].completed && !lv[k].stars) lv[k].stars = lv[k].perfect ? 3 : 1;
     const hist = Save.data.daily.history;
     for (const k in hist) if (hist[k].completed && !hist[k].stars) hist[k].stars = hist[k].perfect ? 3 : 1;
+    // Past dailies can be bought back to this day. Older saves: the first daily in the history, else today.
+    if (!Save.data.startedOn) Save.data.startedOn = Object.keys(hist).sort()[0] || dateKey();
   }
   const STAR_PATH = 'M12 2.6l2.9 6 6.5.8-4.8 4.5 1.2 6.5L12 17.3l-5.8 3.1 1.2-6.5-4.8-4.5 6.5-.8z';
   function starIcons(n, cls) {
@@ -2371,8 +2387,11 @@
       const hist = Save.data.daily.history;
       const rec = Object.assign({ attempted: true }, hist[sess.key]);
       res.replay = !!rec.completed;
+      const late = sess.key < (sess.day || dateKey());
+      res.late = late;
       if (!rec.completed) {
         rec.completed = true;
+        if (late) rec.late = true;
         rec.time = sess.elapsed;
         rec.perfect = perfect;
         rec.stars = res.stars;
@@ -2387,7 +2406,8 @@
       const sk = dailyStreaks();
       Save.data.daily.longestStreak = Math.max(Save.data.daily.longestStreak || 0, sk.longest);
       res.streak = sk.current;
-      res.notes.push(sk.current > 1 ? `Daily streak: ${sk.current} days` : 'Daily streak started');
+      if (late) res.notes.push('Played late, so it doesn’t count toward your streak');
+      else res.notes.push(sk.current > 1 ? `Daily streak: ${sk.current} days` : 'Daily streak started');
     } else if (sess.mode === 'zen') {
       const z = Save.data.zen;
       z.boards[d] = (z.boards[d] || 0) + 1;
@@ -2399,7 +2419,7 @@
     }
     if (res.fastest && sess.mode !== 'campaign') res.notes.push(`Fastest ${diffLabel(d)} clear yet`);
     if (perfect && st.perfectStreak > 1) res.notes.push(`${st.perfectStreak} perfect clears in a row`);
-    const rw = rewardFor(sess.mode, d, res.stars, !!res.replay);
+    const rw = rewardFor(res.late ? 'daily-late' : sess.mode, d, res.stars, !!res.replay); // no daily bonus for past days
     res.reward = grant(rw.xp, rw.coins);
     res.milestones = checkMilestones();
     Save.data.active = null;
@@ -2767,7 +2787,8 @@
     const [y, m] = calMonth;
     const today = dateKey();
     const hist = Save.data.daily.history;
-    const first = Object.keys(hist).sort()[0] || today;
+    const first = Save.data.startedOn || Object.keys(hist).sort()[0] || today;
+    const bought = Save.data.daily.unlocked || {};
     $('#cal-title').textContent = `${MONTHS[m]} ${y}`;
     const grid = $('#cal-grid');
     grid.textContent = '';
@@ -2782,11 +2803,15 @@
       let mark = '', desc = 'not played';
       if (rec && rec.perfect) { cls.push('is-perfect'); mark = '★'; desc = 'perfect clear'; }
       else if (rec && rec.completed) { cls.push('is-done'); mark = '✓'; desc = 'completed'; }
-      else if (k < today && k >= first) { mark = '•'; desc = 'missed'; }
+      else if (k < today && k >= first) { mark = bought[k] ? '▸' : '•'; desc = bought[k] ? 'unlocked, not solved yet' : `missed, tap to unlock for ${DAILY_PAST_COST} coins`; }
+      if (rec && rec.completed && rec.late) { cls.push('is-late'); desc += ', played late'; }
       if (k === today) { cls.push('is-today'); if (!rec || !rec.completed) desc = 'today, not solved yet'; }
       if (k > today) { cls.push('is-future'); desc = 'upcoming'; }
-      const mk = mark === '★' ? 'mark-perfect' : mark === '✓' ? 'mark-done' : 'mark-missed';
-      grid.append(h('div', { class: cls.join(' '), role: 'gridcell', 'aria-label': `${MONTHS[m]} ${day}: ${desc}` },
+      const mk = mark === '★' ? 'mark-perfect' : mark === '✓' ? 'mark-done' : mark === '▸' ? 'mark-open' : 'mark-missed';
+      // Every day from the first one you played up to yesterday can be opened.
+      const playable = k < today && k >= first;
+      if (playable) cls.push('is-playable');
+      grid.append(h(playable ? 'button' : 'div', { class: cls.join(' '), type: playable ? 'button' : null, role: playable ? null : 'gridcell', 'data-day': playable ? k : null, 'aria-label': `${MONTHS[m]} ${day}: ${desc}` },
         h('span', { text: String(day) }), h('i', { class: 'mark ' + mk, 'aria-hidden': 'true', text: mark })));
     }
     const now = new Date();
@@ -2795,6 +2820,35 @@
   $('#cal-prev').addEventListener('click', () => { let [y, m] = calMonth; m--; if (m < 0) { m = 11; y--; } calMonth = [y, m]; renderCalendar(); });
   $('#cal-next').addEventListener('click', () => { let [y, m] = calMonth; m++; if (m > 11) { m = 0; y++; } calMonth = [y, m]; renderCalendar(); });
   $('#daily-play').addEventListener('click', () => { Sound.play('tap'); Game.open('daily', dateKey()); });
+  /* Past dailies: solved or already-unlocked days open for free; a missed
+     day costs DAILY_PAST_COST coins once, then it's yours to retry. */
+  const DAILY_PAST_COST = 10;
+  $('#cal-grid').addEventListener('click', async (e) => {
+    const cell = e.target.closest('[data-day]');
+    if (!cell) return;
+    const k = cell.dataset.day;
+    const rec = Save.data.daily.history[k];
+    const bought = Save.data.daily.unlocked;
+    Sound.play('tap');
+    if ((rec && rec.completed) || bought[k]) { Game.open('daily', k); return; }
+    const info = E.dailyInfo(k);
+    const pr = Save.data.progress;
+    const date = `${MONTHS[parseKey(k).getMonth()]} ${parseKey(k).getDate()}`;
+    if (pr.coins < DAILY_PAST_COST) {
+      await confirmDialog({ title: `${date} · ${diffLabel(info.diff)}`, body: `<p>Playing a past day costs ${DAILY_PAST_COST} coins. You have ${pr.coins}, so you need ${DAILY_PAST_COST - pr.coins} more.</p><p class="hold-note">Clear a few boards or collect your daily coins, then come back.</p>`, ok: 'OK' });
+      return;
+    }
+    const yes = await confirmDialog({
+      title: `Play ${date}?`,
+      body: `<p>${diffLabel(info.diff)} · unlock it for <b>${DAILY_PAST_COST} coins</b> (you have ${fmtNum(pr.coins)}).</p><p class="hold-note">Once unlocked, retries are free. Past days don't count toward your streak and don't get the daily bonus.</p>`,
+      ok: `Unlock for ${DAILY_PAST_COST} coins`,
+    });
+    if (!yes) return;
+    pr.coins -= DAILY_PAST_COST;
+    bought[k] = true;
+    Save.write();
+    Game.open('daily', k);
+  });
 
   /* ---------------- Zen ---------------- */
   renderers.zen = function () {

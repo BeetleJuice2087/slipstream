@@ -547,6 +547,17 @@ kbd {
 .mark-done { color: var(--good); }
 .mark-perfect { color: var(--gold); }
 .mark-missed { color: var(--bad); }
+/* Past dailies you can open (buy once, then free) */
+button.cal-day { border: 0; background: transparent; font: inherit; font-size: 0.85rem; font-variant-numeric: tabular-nums; color: var(--muted); cursor: pointer; padding: 0; }
+button.cal-day.is-done { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--text); }
+button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, transparent); color: var(--text); }
+.cal-day.is-playable:hover, .cal-day.is-playable:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent); outline: none; }
+.mark-open { color: var(--accent); }
+/* Solved later than its day: hollow look, so on-time days stand out */
+.cal-day.is-late.is-done, .cal-day.is-late.is-perfect { background: transparent; }
+.cal-day.is-late.is-done { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--good) 55%, transparent); }
+.cal-day.is-late.is-perfect { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gold) 60%, transparent); }
+.cal-legend .late-swatch { display: inline-block; width: 12px; height: 12px; border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--good); vertical-align: -1px; margin-right: 4px; }
 .cal-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; font-size: 0.85rem; color: var(--muted); }
 .cal-legend .mark { font-style: normal; font-weight: 800; margin-right: 6px; }
 .cal-note { margin: 10px 0 0; font-size: 0.82rem; color: var(--faint); }

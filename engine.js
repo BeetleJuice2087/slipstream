@@ -1026,6 +1026,128 @@
     arrows.forEach((a) => { a.color = color[a.id]; });
   }
 
+  /* ------------------------------------------------------------------
+     Tightening (Zen only): after a board is built, turn some of the arrows
+     that start free end-for-end so they point into another arrow instead.
+     The squares an arrow covers don't change, so this can only ever block
+     the flipped arrow itself; the exact solver then checks the board is
+     still solvable before a flip is kept. Fewer safe openings, deeper chains.
+     ------------------------------------------------------------------ */
+  // Zen-only board tweaks for Expert and up (campaign and daily keep the base numbers).
+  const grow = (dc, dr) => (p) => ({ cols: Math.min(60, p.cols + dc), rows: Math.min(60, p.rows + dr) });
+  const ZEN_TUNE = { expert: grow(1, 1), nightmare: grow(1, 1), insane: grow(0, 1), impossible: grow(0, 1) }; // about +6 to +8 arrows
+  const ZEN_TIGHT_VERSION = 't3'; // t3: bigger Expert+ boards, flips and hand-offs, every head points straight // bump if tightening changes, so saved Zen boards are rebuilt
+  const TIGHT_TRIES = { hard: 4, expert: 4, nightmare: 3, insane: 4, impossible: 3 };
+  const TIGHT_FREE = { hard: 0.16, expert: 0.08, nightmare: 0.07, insane: 0.06, impossible: 0.05 };
+  function tighten(best, params, ratio, rng) {
+    const { cols, rows } = params;
+    const arrows = best.arrows;
+    const puzzle = { cols, rows, arrows };
+    const n = arrows.length;
+    const goal = Math.max(3, Math.ceil(ratio * n));
+    let report = analyze(puzzle);
+    const dirOf = (a, b) => { for (let d = 0; d < 4; d++) if (a[0] + DX[d] === b[0] && a[1] + DY[d] === b[1]) return d; return -1; };
+    const save = (a) => ({ a, cells: a.cells.slice(), dir: a.dir });
+    const undo = (st) => { st.a.cells = st.cells; st.a.dir = st.dir; };
+    // Flip an arrow end-for-end; false if its new head would fly back through itself.
+    const flip = (a) => {
+      if (a.cells.length < 2) return false;
+      a.cells.reverse();
+      const c = a.cells, k = c.length;
+      a.dir = dirOf(c[k - 2], c[k - 1]);
+      if (a.dir < 0) return false;
+      const [hx, hy] = c[k - 1];
+      const own = new Set(c.map(([x, y]) => y * cols + x));
+      return !corridor(cols, rows, hx, hy, a.dir).some((i) => own.has(i));
+    };
+    const better = (r) => r.solvable && r.initialFree < report.initialFree && r.depth >= report.depth;
+    // Every arrow should point the way its last step goes. The builder very rarely
+    // makes a head that turns in its last square: straighten it (or flip the arrow)
+    // as long as the board stays solvable.
+    for (const A of arrows) {
+      const c = A.cells, k = c.length;
+      if (k < 2) continue;
+      const straight = dirOf(c[k - 2], c[k - 1]);
+      if (straight === A.dir) continue;
+      const sa = save(A);
+      A.dir = straight;
+      const own = new Set(c.map(([x, y]) => y * cols + x));
+      let ok = !corridor(cols, rows, c[k - 1][0], c[k - 1][1], straight).some((i) => own.has(i));
+      let r = ok ? analyze(puzzle) : null;
+      if (!r || !r.solvable) { undo(sa); const sf = save(A); ok = flip(A); r = ok ? analyze(puzzle) : null; if (!r || !r.solvable) undo(sf); }
+      if (r && r.solvable) report = r;
+    }
+    for (let pass = 0; pass < 4 && report.initialFree > goal; pass++) {
+      const free = rng.shuffle(new BoardState(puzzle).freeArrows());
+      for (const id of free) {
+        if (report.initialFree <= goal) break;
+        const A = arrows[id];
+        const sa = save(A);
+        if (!flip(A)) { undo(sa); continue; }
+        let r = analyze(puzzle);
+        if (better(r)) { report = r; continue; }
+        // That made a loop (A now waits on an arrow that waited on A). Try also
+        // flipping the arrow A now runs into, which can break the loop.
+        let kept = false;
+        if (!r.solvable) {
+          // Candidates that can break the loop: the arrow A now runs into, and
+          // the arrows whose way out runs through A (they point back into it).
+          const bs = new BoardState(puzzle);
+          const cand = [];
+          const hit = bs.firstBlocker(id);
+          if (hit) cand.push(hit.id);
+          const mine = new Set(A.cells.map(([x, y]) => y * cols + x));
+          for (const o of arrows) {
+            if (o.id === id || cand.length >= 6) continue;
+            const [ox, oy] = o.cells[o.cells.length - 1];
+            if (corridor(cols, rows, ox, oy, o.dir).some((i) => mine.has(i))) cand.push(o.id);
+          }
+          for (const cid of cand) {
+            const B = arrows[cid];
+            const sb = save(B);
+            if (flip(B)) {
+              r = analyze(puzzle);
+              if (better(r)) { report = r; kept = true; break; }
+            }
+            undo(sb);
+          }
+        }
+        if (!kept) undo(sa);
+        if (kept) continue;
+        // Last try: hand A's head square to a neighbour whose tail touches it.
+        // A gets one square shorter and now points straight at that square,
+        // which belongs to the neighbour, so A is blocked. Every square stays covered.
+        if (A.cells.length >= 3) {
+          const H = A.cells[A.cells.length - 1];
+          const owner = new Map();
+          for (const o of arrows) owner.set(o.cells[0][1] * cols + o.cells[0][0], o.id); // tails only
+          for (let d = 0; d < 4 && !kept; d++) {
+            const tx = H[0] + DX[d], ty = H[1] + DY[d];
+            if (tx < 0 || ty < 0 || tx >= cols || ty >= rows) continue;
+            const bid = owner.get(ty * cols + tx);
+            if (bid == null || bid === id) continue;
+            const B = arrows[bid];
+            const sa2 = save(A), sb2 = save(B);
+            A.cells = A.cells.slice(0, -1);
+            const c = A.cells, k = c.length;
+            A.dir = dirOf(c[k - 2], c[k - 1]);
+            B.cells = [H.slice()].concat(B.cells);
+            const nh = c[k - 1], ownA = new Set(c.map(([x, y]) => y * cols + x));
+            const bh = B.cells[B.cells.length - 1];
+            const bHitsSelf = corridor(cols, rows, bh[0], bh[1], B.dir).some((i) => i === H[1] * cols + H[0]);
+            if (A.dir >= 0 && !bHitsSelf && !corridor(cols, rows, nh[0], nh[1], A.dir).some((i) => ownA.has(i))) {
+              const r2 = analyze(puzzle);
+              if (better(r2)) { report = r2; kept = true; break; }
+            }
+            undo(sa2); undo(sb2);
+          }
+        }
+      }
+    }
+    best.solution = report.order;
+    best.report = report;
+  }
+
   const PALETTE_SIZE = 8;
   const MAX_ATTEMPTS = 24;
 
@@ -1035,13 +1157,27 @@
    * a board is accepted only if the validator proves it solvable, the
    * stored solution replays cleanly, and it is non-trivial for its tier.
    */
-  function generate({ seed, diff, t, shape }) {
+  function generate({ seed, diff, t, shape, tight }) {
     const started = Date.now();
     const prng = new RNG(seed + '|params');
     if (t == null) t = prng.float();
     const params = resolveParams(diff, t, prng, shape);
+    if (tight && ZEN_TUNE[diff]) {
+      // Zen only: a slightly bigger board (more arrows). The outline is rebuilt at the new size.
+      const tune = ZEN_TUNE[diff](params);
+      if ((tune.cols && tune.cols !== params.cols) || (tune.rows && tune.rows !== params.rows)) {
+        const cols = tune.cols || params.cols, rows = tune.rows || params.rows;
+        let shp = params.shape, mask;
+        if (shp === 'rect' || shape) mask = buildMask(shp === 'rect' ? 'rect' : shp, cols, rows);
+        else ({ shape: shp, mask } = randomShape(cols, rows, new RNG(seed + '|zen-shape')));
+        let playable = 0;
+        for (let i = 0; i < mask.length; i++) playable += mask[i];
+        Object.assign(params, tune, { cols, rows, shape: shp, mask, playable });
+      } else Object.assign(params, tune);
+    }
     let best = null, bestQuality = -Infinity;
-    let attempts = 0;
+    let attempts = 0, fullBoards = 0;
+    const want = tight ? (TIGHT_TRIES[diff] || 1) : 1; // Zen: compare a few full boards, keep the tightest
     const maxAttempts = DIFFICULTIES[diff].maxAttempts || MAX_ATTEMPTS; // huge boards: fewer retries
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       attempts++;
@@ -1055,12 +1191,12 @@
       const freeCap = Math.max(2, Math.ceil(params.maxFreeRatio * n));
       const ok = report.initialFree <= freeCap && report.depth >= params.minDepth;
       // A fully covered board beats everything else.
-      const quality = (empty === 0 ? 5000 : -empty * 50) + (ok ? 1000 : 0) + report.depth * 3 - (report.initialFree / n) * 20;
+      const quality = (empty === 0 ? 5000 : -empty * 50) + (ok ? 1000 : 0) + report.depth * 3 - (report.initialFree / n) * (tight && TIGHT_FREE[diff] != null ? 400 : 20);
       if (quality > bestQuality) {
         bestQuality = quality;
         best = { arrows, solution, report, rng, empty };
       }
-      if (empty === 0 && (ok || DIFFICULTIES[diff].acceptFirstFull)) break;
+      if (empty === 0 && (ok || DIFFICULTIES[diff].acceptFirstFull) && ++fullBoards >= want) break;
     }
     // Odd outlines can leave a stubborn gap. Only then, try again with the
     // rescue fill pass switched on (boards that already filled are untouched).
@@ -1078,6 +1214,7 @@
       }
     }
     if (!best) throw new Error('Generator could not build a solvable board for seed ' + seed);
+    if (tight && TIGHT_FREE[diff] != null) tighten(best, params, TIGHT_FREE[diff], new RNG(seed + '|tight'));
     assignColors(best.arrows, params.cols, params.rows, new RNG(seed + '|colors'), PALETTE_SIZE);
     const mask = Array.from(params.mask);
     return {
@@ -1140,14 +1277,14 @@
   function dailyPuzzle(dateKey) { return generate(dailyInfo(dateKey)); }
 
   function zenPuzzle(seed, diff) {
-    return generate({ seed: 'zen|' + SEED_VERSION + '|' + seed, diff, t: null });
+    return generate({ seed: 'zen|' + SEED_VERSION + '|' + seed, diff, t: null, tight: true });
   }
 
   const api = {
     RNG, hashString, DX, DY, DIR_NAMES, DIFFICULTIES, DIFFICULTY_ORDER,
     resolveParams, buildMask, corridor, BoardState, analyze, verifySolution,
     generate, CAMPAIGN_TIERS, CAMPAIGN_LENGTH, campaignLevelInfo, campaignPuzzle,
-    dailyInfo, dailyPuzzle, zenPuzzle, DAILY_BY_WEEKDAY, PALETTE_SIZE, GENERATOR_VERSION,
+    dailyInfo, dailyPuzzle, zenPuzzle, DAILY_BY_WEEKDAY, PALETTE_SIZE, GENERATOR_VERSION, ZEN_TIGHT_VERSION, ZEN_TUNE, TIGHT_TRIES, TIGHT_FREE,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   global.SlipEngine = api;
