@@ -24,12 +24,14 @@ All difficulty numbers live in `DIFFICULTIES` in `engine.js`. Add an `expert` en
 and it appears in Zen automatically.
 
 ## Zen tightening (Hard and up)
-- Zen Expert and up use slightly bigger boards (about +6 to +8 arrows).
+- Zen Hard and up (and campaign 71+) use shorter arrows: medium arrows about half as long, few long
+  ones, and the fill step's length cap follows suit (longest arrow ~13–25 instead of ~30–65).
 - After a Zen board on Hard and up is built, free arrows are made blocked where possible: the arrow
   is flipped end-for-end, or its head square is handed to a neighbour's tail. Each change is kept
   only if the exact solver still proves the board solvable. Every head points the way its last step
-  goes (no turned heads). Campaign and Daily boards are not changed.
-- Free at the start, roughly: Hard 19%, Expert 13%, Nightmare 12%, Insane 11%, Impossible 9%.
+  goes (no turned heads). Campaign levels 71+ (Hard tier and up) get the same tightening;
+  campaign levels 1–70 and Daily boards are not changed.
+- Free at the start, roughly: Hard 18%, Expert 14%, Nightmare 12%, Insane 10%, Impossible 11%.
 
 ## Developer tools
 Settings → tap the version line five times → turn on Developer tools (or open with `#debug`).

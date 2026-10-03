@@ -1034,9 +1034,17 @@
      still solvable before a flip is kept. Fewer safe openings, deeper chains.
      ------------------------------------------------------------------ */
   // Zen-only board tweaks for Expert and up (campaign and daily keep the base numbers).
-  const grow = (dc, dr) => (p) => ({ cols: Math.min(60, p.cols + dc), rows: Math.min(60, p.rows + dr) });
-  const ZEN_TUNE = { expert: grow(1, 1), nightmare: grow(1, 1), insane: grow(0, 1), impossible: grow(0, 1) }; // about +6 to +8 arrows
-  const ZEN_TIGHT_VERSION = 't3'; // t3: bigger Expert+ boards, flips and hand-offs, every head points straight // bump if tightening changes, so saved Zen boards are rebuilt
+  // Shorter arrows (a long snake clears too much of the board in one tap): medium arrows
+  // ~55%, far fewer long ones and those ~35% as long, fewer bends. The fill step's length
+  // cap follows longLen, so no arrow grows back into a huge snake.
+  const shorten = (p) => ({
+    medLen: [Math.max(3, Math.round(p.medLen[0] * 0.55)), Math.max(4, Math.round(p.medLen[1] * 0.55))],
+    longChance: p.longChance * 0.25,
+    longLen: [Math.max(5, Math.round(p.longLen[0] * 0.35)), Math.max(7, Math.round(p.longLen[1] * 0.35))],
+    maxBends: Math.max(3, Math.round(p.maxBends * 0.5)),
+  });
+  const ZEN_TUNE = { hard: shorten, expert: shorten, nightmare: shorten, insane: shorten, impossible: shorten };
+  const ZEN_TIGHT_VERSION = 't4'; // t4: shorter arrows, flips and hand-offs, every head points straight // bump if tightening changes, so saved Zen boards are rebuilt
   const TIGHT_TRIES = { hard: 4, expert: 4, nightmare: 3, insane: 4, impossible: 3 };
   const TIGHT_FREE = { hard: 0.16, expert: 0.08, nightmare: 0.07, insane: 0.06, impossible: 0.05 };
   function tighten(best, params, ratio, rng) {
@@ -1157,7 +1165,7 @@
    * a board is accepted only if the validator proves it solvable, the
    * stored solution replays cleanly, and it is non-trivial for its tier.
    */
-  function generate({ seed, diff, t, shape, tight }) {
+  function generate({ seed, diff, t, shape, tight, retry }) {
     const started = Date.now();
     const prng = new RNG(seed + '|params');
     if (t == null) t = prng.float();
@@ -1214,7 +1222,20 @@
       }
     }
     if (!best) throw new Error('Generator could not build a solvable board for seed ' + seed);
-    if (tight && TIGHT_FREE[diff] != null) tighten(best, params, TIGHT_FREE[diff], new RNG(seed + '|tight'));
+    if (tight && TIGHT_FREE[diff] != null) {
+      tighten(best, params, TIGHT_FREE[diff], new RNG(seed + '|tight'));
+      // Tightened boards never show a head that turns in its last square. In the rare
+      // case one can't be straightened, build the board again from a related seed.
+      const turned = best.arrows.some((a) => {
+        const c = a.cells, k = c.length;
+        return k > 1 && (c[k - 1][0] - c[k - 2][0] !== DX[a.dir] || c[k - 1][1] - c[k - 2][1] !== DY[a.dir]);
+      });
+      if (turned && (retry || 0) < 6) {
+        const again = generate({ seed: seed + '|again', diff, t: params.t, shape, tight, retry: (retry || 0) + 1 });
+        again.seed = String(seed);
+        return again;
+      }
+    }
     assignColors(best.arrows, params.cols, params.rows, new RNG(seed + '|colors'), PALETTE_SIZE);
     const mask = Array.from(params.mask);
     return {
@@ -1259,9 +1280,12 @@
     const t = tier.to === tier.from ? 1 : (level - tier.from) / (tier.to - tier.from);
     return { level, diff: tier.diff, t, seed: 'campaign|' + SEED_VERSION + '|' + level };
   }
+  // From the Hard tier on, campaign boards get the same tightening as Zen
+  // (Hard: fewer free arrows; Expert and up: also slightly bigger boards).
+  const CAMPAIGN_TIGHT_FROM = 71;
   function campaignPuzzle(level) {
     const info = campaignLevelInfo(level);
-    return generate(info);
+    return generate(Object.assign({}, info, { tight: level >= CAMPAIGN_TIGHT_FROM }));
   }
 
   // Daily difficulty climbs through the week: Mon easy → weekend hard.
@@ -1283,7 +1307,7 @@
   const api = {
     RNG, hashString, DX, DY, DIR_NAMES, DIFFICULTIES, DIFFICULTY_ORDER,
     resolveParams, buildMask, corridor, BoardState, analyze, verifySolution,
-    generate, CAMPAIGN_TIERS, CAMPAIGN_LENGTH, campaignLevelInfo, campaignPuzzle,
+    generate, CAMPAIGN_TIERS, CAMPAIGN_LENGTH, CAMPAIGN_TIGHT_FROM, campaignLevelInfo, campaignPuzzle,
     dailyInfo, dailyPuzzle, zenPuzzle, DAILY_BY_WEEKDAY, PALETTE_SIZE, GENERATOR_VERSION, ZEN_TIGHT_VERSION, ZEN_TUNE, TIGHT_TRIES, TIGHT_FREE,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

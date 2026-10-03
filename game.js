@@ -348,7 +348,9 @@
   const bonusDone = () => { const b = Save.data.campaign.bonus; let n = 0; for (const k in b) if (b[k].completed) n++; return n; };
   // Which generator built a saved board. Zen 2D boards are also "tightened", so they have their own tag.
   const genFor = (key, mode) => (isCubeKey(key) ? E.GENERATOR_VERSION + '+' + SlipCube.CUBE_VERSION
-    : (mode === 'zen' || mode === 'debug') ? E.GENERATOR_VERSION + '+' + E.ZEN_TIGHT_VERSION : E.GENERATOR_VERSION);
+    : (mode === 'zen' || mode === 'debug') ? E.GENERATOR_VERSION + '+' + E.ZEN_TIGHT_VERSION
+    : (mode === 'campaign' && Number(key) >= E.CAMPAIGN_TIGHT_FROM) ? E.GENERATOR_VERSION + '+c' + E.ZEN_TIGHT_VERSION
+    : E.GENERATOR_VERSION);
   function puzzleFor(sess) {
     const key = `${sess.mode}|${sess.key}|${sess.diff}`;
     if (puzzleCache.has(key)) return puzzleCache.get(key);
