@@ -72,6 +72,14 @@
             <span class="mode-sub" id="home-zen-sub">Endless boards, no final level</span>
           </span>
         </button>
+        <button class="mode-card mode-pictures" type="button" data-go="pictures">
+          <svg class="mode-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="7" y="9" width="34" height="30" rx="4" /><path class="fill" d="M12 34 L20 23 L26 30 L30 26 L37 34 Z" /><circle class="fill" cx="31" cy="17" r="3" /></svg>
+          <span class="mode-text">
+            <span class="mode-name">Pictures</span>
+            <span class="mode-sub" id="home-pictures-sub">Clear a board to reveal its picture</span>
+          </span>
+          <span class="mode-meter" aria-hidden="true"><span id="home-pictures-bar"></span></span>
+        </button>
       </nav>
 
       <div class="home-row">
@@ -230,6 +238,20 @@
       <p class="screen-lede">One-time goals. Each one pays a coin bonus the moment you earn it.</p>
       <div class="ach-bar" aria-hidden="true"><span id="ach-bar"></span></div>
       <div class="ms-list" id="ach-list"></div>
+    </div>
+  </section>
+
+  <!-- ============================ PICTURES ============================ -->
+  <section class="screen screen-menu" id="screen-pictures" data-screen="pictures" hidden>
+    <div class="menu-col">
+      <header class="screen-head">
+        <button class="icon-btn" type="button" data-back aria-label="Back to home"><svg viewBox="0 0 24 24"><path d="M19 12H7M12 6l-6 6 6 6" /></svg></button>
+        <h2>Pictures</h2>
+        <span class="head-meta" id="pic-count">0 / 32</span>
+      </header>
+      <p class="screen-lede">Every board is a hidden picture. Clear it to find out what it is and add it to your gallery.</p>
+      <div class="ach-bar" aria-hidden="true"><span id="pic-bar"></span></div>
+      <div class="pic-grid" id="pic-grid"></div>
     </div>
   </section>
 
@@ -479,6 +501,7 @@
 </div>
 <script src="sounds.js"></script>
 <script src="engine.js"></script>
+<script src="pictures.js"></script>
 <script src="cube.js"></script>
 <script src="game.js"></script>
 <!--PAGE-END-->

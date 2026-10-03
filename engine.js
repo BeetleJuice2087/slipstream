@@ -1185,7 +1185,7 @@
    * a board is accepted only if the validator proves it solvable, the
    * stored solution replays cleanly, and it is non-trivial for its tier.
    */
-  function generate({ seed, diff, t, shape, tight, retry }) {
+  function generate({ seed, diff, t, shape, tight, retry, mask: fixedMask }) {
     const started = Date.now();
     const prng = new RNG(seed + '|params');
     if (t == null) t = prng.float();
@@ -1202,6 +1202,12 @@
         for (let i = 0; i < mask.length; i++) playable += mask[i];
         Object.assign(params, tune, { cols, rows, shape: shp, mask, playable });
       } else Object.assign(params, tune);
+    }
+    if (fixedMask) {
+      // Picture boards: use the given outline exactly (no random shape).
+      let playable = 0;
+      for (let i = 0; i < fixedMask.mask.length; i++) playable += fixedMask.mask[i];
+      Object.assign(params, { cols: fixedMask.cols, rows: fixedMask.rows, mask: Uint8Array.from(fixedMask.mask), shape: 'picture', playable, rescue: true });
     }
     let best = null, bestQuality = -Infinity;
     let attempts = 0, fullBoards = 0;
@@ -1242,8 +1248,10 @@
       }
     }
     if (!best) throw new Error('Generator could not build a solvable board for seed ' + seed);
-    if (tight && TIGHT_FREE[diff] != null) {
-      tighten(best, params, TIGHT_FREE[diff], new RNG(seed + '|tight'));
+    // Picture boards always get the straightening pass (ratio 1 = no extra flips on easy ones).
+    const tightRatio = tight ? (TIGHT_FREE[diff] != null ? TIGHT_FREE[diff] : fixedMask ? 1 : null) : null;
+    if (tightRatio != null) {
+      tighten(best, params, tightRatio, new RNG(seed + '|tight'));
       // Tightened boards never show a head that turns in its last square. In the rare
       // case one can't be straightened, build the board again from a related seed.
       const turned = best.arrows.some((a) => {
@@ -1251,7 +1259,7 @@
         return k > 1 && (c[k - 1][0] - c[k - 2][0] !== DX[a.dir] || c[k - 1][1] - c[k - 2][1] !== DY[a.dir]);
       });
       if (turned && (retry || 0) < 6) {
-        const again = generate({ seed: seed + '|again', diff, t: params.t, shape, tight, retry: (retry || 0) + 1 });
+        const again = generate({ seed: seed + '|again', diff, t: params.t, shape, tight, retry: (retry || 0) + 1, mask: fixedMask });
         again.seed = String(seed);
         return again;
       }

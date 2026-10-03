@@ -66,6 +66,7 @@
       campaign: { unlocked: 1, levels: {}, bonus: {} },
       daily: { history: {}, longestStreak: 0, unlocked: {} }, // unlocked: past days bought with coins
       startedOn: null, // first day this player opened the game
+      pictures: { done: {} }, // picture index -> { completed, stars, perfect, bestTime, plays, clears }
       zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [], dim: '2d' },
       stats: {
         played: 0, completed: 0, perfect: 0, playMs: 0,
@@ -347,7 +348,18 @@
   const levelStore = (mode) => (mode === 'bonus' ? Save.data.campaign.bonus : Save.data.campaign.levels);
   const bonusDone = () => { const b = Save.data.campaign.bonus; let n = 0; for (const k in b) if (b[k].completed) n++; return n; };
   // Which generator built a saved board. Zen 2D boards are also "tightened", so they have their own tag.
-  const genFor = (key, mode) => (isCubeKey(key) ? E.GENERATOR_VERSION + '+' + SlipCube.CUBE_VERSION
+  /* Pictures: picture k unlocks once you've found k-2 others, so three are always open. */
+  const PIC = window.SlipPictures;
+  const picDone = () => { const d = Save.data.pictures.done; let n = 0; for (const k in d) if (d[k].completed) n++; return n; };
+  const picUnlocked = (k) => k < picDone() + 3 || !!(Save.data.pictures.done[k] && Save.data.pictures.done[k].completed);
+  /** The picture's outline as one SVG path of squares (for gallery tiles and the reveal). */
+  function picSvg(k, cls) {
+    const L = PIC.pictureLevel(k), m = PIC.pictureMask(PIC.PICTURES[k], 1);
+    let d = '';
+    for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) if (m.mask[y * m.cols + x]) d += `M${x} ${y}h1.04v1.04h-1.04z`;
+    return `<svg class="${cls || ''}" viewBox="-0.5 -0.5 ${m.cols + 1} ${m.rows + 1}" aria-hidden="true" data-pic="${L.id}"><path d="${d}"/></svg>`;
+  }
+  const genFor = (key, mode) => (mode === 'picture' ? E.GENERATOR_VERSION + '+' + E.ZEN_TIGHT_VERSION + '+' + PIC.PICTURE_VERSION : isCubeKey(key) ? E.GENERATOR_VERSION + '+' + SlipCube.CUBE_VERSION
     : (mode === 'zen' || mode === 'debug') ? E.GENERATOR_VERSION + '+' + E.ZEN_TIGHT_VERSION
     : (mode === 'campaign' && Number(key) >= E.CAMPAIGN_TIGHT_FROM) ? E.GENERATOR_VERSION + '+c' + E.ZEN_TIGHT_VERSION
     : E.GENERATOR_VERSION);
@@ -357,6 +369,7 @@
     let p;
     if (sess.mode === 'campaign') p = E.campaignPuzzle(Number(sess.key));
     else if (sess.mode === 'bonus') p = SlipCube.bonusCube(Number(sess.key));
+    else if (sess.mode === 'picture') p = PIC.picturePuzzle(E, Number(sess.key));
     else if (sess.mode === 'daily') p = E.dailyPuzzle(sess.key);
     else if (isCubeKey(sess.key)) p = SlipCube.zenCube(String(sess.key).slice(3), sess.diff);
     else p = E.zenPuzzle(sess.key, sess.diff);
@@ -1846,6 +1859,7 @@
   function newSession(mode, key, diff) {
     if (mode === 'campaign') diff = E.campaignLevelInfo(Number(key)).diff;
     if (mode === 'bonus') diff = SlipCube.bonusCube(Number(key)).diff;
+    if (mode === 'picture') diff = PIC.pictureLevel(Number(key)).diff;
     if (mode === 'daily') diff = E.dailyInfo(key).diff;
     return { mode, key: String(key), diff, gen: genFor(key, mode), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0, stuck: [], day: dateKey() };
   }
@@ -1891,7 +1905,7 @@
       opts = opts || {};
       const act = Save.data.active;
       let sess;
-      const matches = act && !act.done && act.gen === genFor(key, mode) && act.mode === mode && String(act.key) === String(key) && (mode === 'campaign' || mode === 'bonus' || mode === 'daily' || act.diff === diff);
+      const matches = act && !act.done && act.gen === genFor(key, mode) && act.mode === mode && String(act.key) === String(key) && (mode === 'campaign' || mode === 'bonus' || mode === 'picture' || mode === 'daily' || act.diff === diff);
       if (matches && !opts.fresh) sess = act;
       else {
         sess = newSession(mode, key, diff);
@@ -1961,6 +1975,10 @@
       let mode = '', name = '';
       if (sess.mode === 'campaign') { mode = 'Campaign'; name = 'Level ' + sess.key; }
       else if (sess.mode === 'bonus') { mode = 'Campaign · 3D bonus'; name = 'Bonus ' + sess.key; }
+      else if (sess.mode === 'picture') {
+        const k = Number(sess.key), rec = Save.data.pictures.done[k];
+        mode = 'Pictures'; name = rec && rec.completed ? PIC.PICTURES[k].name : `Picture ${k + 1}`; // a mystery until found
+      }
       else if (sess.mode === 'daily') { mode = 'Daily Puzzle'; name = shortDate(sess.key); }
       else if (sess.mode === 'zen') { mode = isCubeKey(sess.key) ? 'Zen · 3D' : 'Zen'; name = 'Board ' + ((Save.data.zen.session.count || 0) + 1); }
       else { mode = isCubeKey(sess.key) ? 'Sandbox 3D · not counted' : 'Sandbox · not counted'; name = 'Seed ' + (isCubeKey(sess.key) ? String(sess.key).slice(3) : sess.key); }
@@ -2136,7 +2154,7 @@
       this.loadToken++;
       const mode = this.session ? this.session.mode : 'home';
       Save.write();
-      showScreen(mode === 'debug' ? (this.debugFrom || 'zen') : mode === 'bonus' ? 'campaign' : mode);
+      showScreen(mode === 'debug' ? (this.debugFrom || 'zen') : mode === 'bonus' ? 'campaign' : mode === 'picture' ? 'pictures' : mode);
     },
 
     /* ---- developer tools ---- */
@@ -2187,6 +2205,11 @@
     if (sess.mode === 'daily') {
       const hist = Save.data.daily.history;
       hist[sess.key] = Object.assign({}, hist[sess.key], { attempted: true, diff: sess.diff });
+    }
+    if (sess.mode === 'picture') {
+      const pd = Save.data.pictures.done;
+      pd[sess.key] = Object.assign({ plays: 0 }, pd[sess.key]);
+      pd[sess.key].plays++;
     }
     if (sess.mode === 'campaign' || sess.mode === 'bonus') {
       const lv = levelStore(sess.mode);
@@ -2299,6 +2322,10 @@
       progress: () => [Math.min(7, Save.data.progress.login.best || 0), 7] },
     { id: 'inconceivable', name: 'Inconceivable!', desc: 'Clear an Inconceivable board in Zen', coins: 200,
       progress: () => [Math.min(1, Save.data.zen.boards.inconceivable || 0), 1] },
+    { id: 'pictures-10', name: 'Art collector', desc: 'Find 10 pictures', coins: 100,
+      progress: () => [Math.min(10, picDone()), 10] },
+    { id: 'pictures-all', name: 'Full gallery', desc: `Find all ${window.SlipPictures.PICTURES.length} pictures`, coins: 300,
+      progress: () => [picDone(), window.SlipPictures.PICTURES.length] },
     { id: 'bonus-first', name: 'Third dimension', desc: 'Clear your first 3D bonus level', coins: 50,
       progress: () => [Math.min(1, bonusDone()), 1] },
     { id: 'bonus-all', name: 'Cube master', desc: `Clear all ${SlipCube.BONUS_COUNT} 3D bonus levels`, coins: 300,
@@ -2375,6 +2402,20 @@
         rec.bonusNoted = true;
         res.notes.push(`3D Bonus ${L / SlipCube.BONUS_AFTER} unlocked`);
       }
+    } else if (sess.mode === 'picture') {
+      const k = Number(sess.key);
+      const pd = Save.data.pictures.done;
+      const rec = Object.assign({ plays: 1 }, pd[k]);
+      res.replay = !!rec.completed;
+      res.firstFind = !rec.completed;
+      if (rec.bestTime == null || sess.elapsed < rec.bestTime) { if (rec.completed) res.notes.push('New best time for this picture'); rec.bestTime = sess.elapsed; }
+      rec.completed = true;
+      rec.perfect = !!rec.perfect || perfect;
+      if (rec.stars && res.stars > rec.stars) res.notes.push(`New best: ${res.stars} stars`);
+      rec.stars = Math.max(rec.stars || 0, res.stars);
+      rec.clears = (rec.clears || 0) + 1;
+      pd[k] = rec;
+      if (res.firstFind) res.notes.push(`${picDone()} of ${PIC.PICTURES.length} pictures found`);
     } else if (sess.mode === 'bonus') {
       const k = Number(sess.key);
       const bl = Save.data.campaign.bonus;
@@ -2523,6 +2564,7 @@
       let title = '';
       if (act.mode === 'campaign') title = `Level ${act.key} · ${diffLabel(act.diff)}`;
       else if (act.mode === 'bonus') title = `3D Bonus ${act.key} · ${diffLabel(act.diff)}`;
+      else if (act.mode === 'picture') title = `Picture ${Number(act.key) + 1} · ${diffLabel(act.diff)}`;
       else if (act.mode === 'daily') title = act.key === dateKey() ? `Today's Daily · ${diffLabel(act.diff)}` : `Daily ${shortDate(act.key)}`;
       else title = `Zen · ${diffLabel(act.diff)}`;
       $('#home-continue-title').textContent = title;
@@ -2535,6 +2577,9 @@
     const un = Save.data.campaign.unlocked;
     $('#home-campaign-sub').textContent = done ? `${done} cleared · ★ ${campaignStars()} · next up: Level ${Math.min(un, E.CAMPAIGN_LENGTH)}` : `${E.CAMPAIGN_LENGTH} levels · Easy to ${diffLabel(E.CAMPAIGN_TIERS[E.CAMPAIGN_TIERS.length - 1].diff)}`;
     $('#home-campaign-bar').style.width = `${pct(done, E.CAMPAIGN_LENGTH)}%`;
+    const pf = picDone(), pn = PIC.PICTURES.length;
+    $('#home-pictures-sub').textContent = pf ? `${pf} of ${pn} pictures found` : `${pn} hidden pictures to find`;
+    $('#home-pictures-bar').style.width = `${pct(pf, pn)}%`;
 
     const today = dateKey();
     const info = E.dailyInfo(today);
@@ -2685,6 +2730,39 @@
     $('#ach-count').textContent = `${k} / ${MILESTONES.length}`;
     $('#ach-bar').style.width = `${pct(k, MILESTONES.length)}%`;
   };
+
+  /* ---------------- Pictures ---------------- */
+  renderers.pictures = function () {
+    const grid = $('#pic-grid');
+    grid.textContent = '';
+    const pd = Save.data.pictures.done, n = PIC.PICTURES.length;
+    let next = null;
+    for (let k = 0; k < n; k++) {
+      const rec = pd[k] || {}, L = PIC.pictureLevel(k);
+      const open = picUnlocked(k);
+      const cls = ['pic-tile', 'tier-' + L.diff];
+      if (rec.completed) cls.push('is-done'); else if (open) cls.push('is-open'); else cls.push('is-locked');
+      if (open && !rec.completed && next == null) { next = k; cls.push('is-next'); }
+      const label = rec.completed ? `${PIC.PICTURES[k].name}, ${rec.stars || 1} of 3 stars` : open ? `Picture ${k + 1}, a mystery. ${diffLabel(L.diff)}` : `Picture ${k + 1}, locked`;
+      const tile = h('button', { class: cls.join(' '), type: 'button', disabled: !open, 'aria-label': label, 'data-pic': k });
+      if (rec.completed) {
+        tile.innerHTML = picSvg(k, 'pic-art');
+        tile.append(h('span', { class: 'pic-name', text: PIC.PICTURES[k].name }), starIcons(rec.stars || 1, 'tiny'));
+      } else {
+        tile.append(h('span', { class: 'pic-mystery', text: open ? '?' : '' }), h('span', { class: 'pic-name', text: open ? `#${k + 1}` : `#${k + 1} · locked` }));
+      }
+      grid.append(tile);
+    }
+    const found = picDone();
+    $('#pic-count').textContent = `${found} / ${n}`;
+    $('#pic-bar').style.width = `${pct(found, n)}%`;
+  };
+  $('#pic-grid').addEventListener('click', (e) => {
+    const t = e.target.closest('.pic-tile');
+    if (!t || t.disabled) return;
+    Sound.play('tap');
+    Game.open('picture', Number(t.dataset.pic));
+  });
 
   /* ---------------- Campaign ---------------- */
   renderers.campaign = function () {
@@ -2977,7 +3055,8 @@
         ...E.CAMPAIGN_TIERS.map((t) => row(`${diffLabel(t.diff)} levels completed`, `${doneBy[t.diff] || 0} / ${t.to - t.from + 1}`)),
         row('Campaign perfect clears', `${perfectCamp.n}`),
         row('Campaign stars', `★ ${campaignStars()} / ${E.CAMPAIGN_LENGTH * 3}`),
-        row('3D bonus levels completed', `${bonusDone()} / ${SlipCube.BONUS_COUNT}`))));
+        row('3D bonus levels completed', `${bonusDone()} / ${SlipCube.BONUS_COUNT}`),
+        row('Pictures found', `${picDone()} / ${PIC.PICTURES.length}`))));
 
     body.append(section('Daily', h('div', { class: 'stat-rows' },
       row('Daily puzzles attempted', fmtNum(tot.attempted)),
@@ -3126,18 +3205,26 @@
   function showComplete(sess, puzzle, res) {
     if (currentScreen !== 'game' || Game.session !== sess) return;
     const ov = $('#complete-overlay');
-    $$('.zen-next', ov).forEach((n) => n.remove());
+    $$('.zen-next, .pic-reveal', ov).forEach((n) => n.remove());
     const sheet = $('.complete-sheet', ov);
     sheet.classList.remove('is-failed');
     sheet.classList.toggle('is-perfect', res.perfect);
     let kicker = '';
     if (sess.mode === 'campaign') kicker = `Level ${sess.key} · ${diffLabel(sess.diff)}`;
     else if (sess.mode === 'bonus') kicker = `3D Bonus ${sess.key} · ${diffLabel(sess.diff)}`;
+    else if (sess.mode === 'picture') kicker = `Picture ${Number(sess.key) + 1} · ${diffLabel(sess.diff)}`;
     else if (sess.mode === 'daily') kicker = `Daily · ${shortDate(sess.key)}`;
     else if (sess.mode === 'zen') kicker = `Zen${isCubeKey(sess.key) ? ' 3D' : ''} · ${diffLabel(sess.diff)}`;
     else kicker = 'Sandbox';
     $('#complete-kicker').textContent = kicker;
     $('#complete-title').textContent = res.perfect ? 'Perfect' : 'Cleared';
+    if (sess.mode === 'picture') {
+      // The reveal: the picture's outline and its name.
+      const k = Number(sess.key);
+      const rv = h('div', { class: 'pic-reveal' + (res.firstFind ? ' is-new' : ''), html: picSvg(k, 'pic-reveal-art') });
+      rv.append(h('p', { class: 'pic-reveal-name', text: `${res.firstFind ? 'You found: ' : ''}${PIC.PICTURES[k].name}!` }));
+      $('#complete-title').after(rv);
+    }
     const starBox = $('#complete-stars');
     starBox.textContent = '';
     starBox.hidden = !res.counted;
@@ -3170,7 +3257,7 @@
     const btn = (label, cls, fn) => h('button', { class: cls, type: 'button', onclick: fn, text: label });
     clearTimeout(zenTimer);
     /* Fewer than 3 stars: offer a fresh run of the same board. */
-    const canRetry = res.counted && res.stars < MAX_STARS && (sess.mode === 'campaign' || sess.mode === 'bonus' || sess.mode === 'daily');
+    const canRetry = res.counted && res.stars < MAX_STARS && (sess.mode === 'campaign' || sess.mode === 'bonus' || sess.mode === 'picture' || sess.mode === 'daily');
     if (canRetry) {
       acts.append(btn(`Try again for ${MAX_STARS} stars`, 'ghost-btn retry-btn', () => {
         ov.hidden = true;
@@ -3185,6 +3272,11 @@
       else acts.append(btn('All levels', 'ghost-btn', () => showScreen('campaign')));
       if (L < E.CAMPAIGN_LENGTH) acts.append(btn(`Level ${L + 1} →`, 'primary-btn', () => { ov.hidden = true; Game.open('campaign', L + 1); }));
       else acts.append(btn('Replay level', 'primary-btn', () => { ov.hidden = true; Game.open('campaign', L, null, { fresh: true }); }));
+    } else if (sess.mode === 'picture') {
+      const next = Number(sess.key) + 1;
+      acts.append(btn('Gallery', 'ghost-btn', () => showScreen('pictures')));
+      if (next < PIC.PICTURES.length && picUnlocked(next)) acts.append(btn(`Picture ${next + 1} →`, 'primary-btn', () => { ov.hidden = true; Game.open('picture', next); }));
+      else acts.append(btn('Gallery', 'primary-btn', () => showScreen('pictures')));
     } else if (sess.mode === 'bonus') {
       // Back to the main path: the level after the one this bonus follows.
       const L = Math.min(E.CAMPAIGN_LENGTH, bonusAfter(Number(sess.key)) + 1);
