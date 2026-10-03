@@ -51,7 +51,7 @@
   }
   const fmtNum = (n) => (n || 0).toLocaleString();
   const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
-  const DIFF_COLOR = { easy: 'var(--a3)', medium: 'var(--a1)', hard: 'var(--a0)', expert: 'var(--a6)', nightmare: 'var(--a7)', insane: 'var(--a0)', impossible: 'var(--text)' };
+  const DIFF_COLOR = { easy: 'var(--a3)', medium: 'var(--a1)', hard: 'var(--a0)', expert: 'var(--a6)', nightmare: 'var(--a7)', insane: 'var(--a0)', impossible: 'var(--text)', inconceivable: 'var(--a6)' };
   const diffLabel = (d) => (E.DIFFICULTIES[d] ? E.DIFFICULTIES[d].label : d);
 
   /* ======================================================================
@@ -2232,7 +2232,7 @@
      PROGRESS — XP, player level and coins. Coins only buy looks in the
      Style shop; hints stay free (they cost stars instead).
      ====================================================================== */
-  const XP_BASE = { easy: 10, medium: 15, hard: 20, expert: 30, nightmare: 40, insane: 55, impossible: 75 };
+  const XP_BASE = { easy: 10, medium: 15, hard: 20, expert: 30, nightmare: 40, insane: 55, impossible: 75, inconceivable: 110 };
   /** XP needed to go from level L to L + 1. */
   const xpToNext = (L) => 60 + 20 * (L - 1);
   function levelInfo(xp) {
@@ -2297,6 +2297,8 @@
       progress: () => [E.CAMPAIGN_TIERS.reduce((a, tr) => a + tierDone(tr), 0), E.CAMPAIGN_LENGTH] },
     { id: 'login-week', name: 'Regular', desc: 'Collect daily coins 7 days in a row', coins: 50,
       progress: () => [Math.min(7, Save.data.progress.login.best || 0), 7] },
+    { id: 'inconceivable', name: 'Inconceivable!', desc: 'Clear an Inconceivable board in Zen', coins: 200,
+      progress: () => [Math.min(1, Save.data.zen.boards.inconceivable || 0), 1] },
     { id: 'bonus-first', name: 'Third dimension', desc: 'Clear your first 3D bonus level', coins: 50,
       progress: () => [Math.min(1, bonusDone()), 1] },
     { id: 'bonus-all', name: 'Cube master', desc: `Clear all ${SlipCube.BONUS_COUNT} 3D bonus levels`, coins: 300,
@@ -2531,7 +2533,7 @@
     const lv = Save.data.campaign.levels;
     const done = Object.keys(lv).filter((k) => lv[k].completed).length;
     const un = Save.data.campaign.unlocked;
-    $('#home-campaign-sub').textContent = done ? `${done} cleared · ★ ${campaignStars()} · next up: Level ${Math.min(un, E.CAMPAIGN_LENGTH)}` : `${E.CAMPAIGN_LENGTH} levels · Easy to ${diffLabel(E.DIFFICULTY_ORDER[E.DIFFICULTY_ORDER.length - 1])}`;
+    $('#home-campaign-sub').textContent = done ? `${done} cleared · ★ ${campaignStars()} · next up: Level ${Math.min(un, E.CAMPAIGN_LENGTH)}` : `${E.CAMPAIGN_LENGTH} levels · Easy to ${diffLabel(E.CAMPAIGN_TIERS[E.CAMPAIGN_TIERS.length - 1].diff)}`;
     $('#home-campaign-bar').style.width = `${pct(done, E.CAMPAIGN_LENGTH)}%`;
 
     const today = dateKey();

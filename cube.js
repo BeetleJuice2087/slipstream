@@ -163,6 +163,7 @@
     nightmare:  { N: 7, len: [3, 8], turn: 0.5, minDepth: 10, cand: 8, plain: 0.25, shape: { cells: [310, 410], dim: [3, 5], boxes: [2, 4], maxExt: 13 } },
     insane:     { N: 8, len: [3, 9], turn: 0.5, minDepth: 11, cand: 6, plain: 0.25, shape: { cells: [390, 500], dim: [4, 6], boxes: [2, 4], maxExt: 14 } },
     impossible: { N: 9, len: [3, 10], turn: 0.5, minDepth: 12, cand: 6, plain: 0.25, shape: { cells: [470, 600], dim: [4, 6], boxes: [3, 5], maxExt: 15 } },
+    inconceivable: { N: 10, len: [3, 8], turn: 0.5, minDepth: 13, cand: 6, plain: 0.25, shape: { cells: [580, 720], dim: [4, 7], boxes: [3, 5], maxExt: 16 } },
   };
 
   /* ------------------------------------------------------------------

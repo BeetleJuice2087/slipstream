@@ -139,7 +139,7 @@
     },
     impossible: {
       id: 'impossible', label: 'Impossible', rank: 7,
-      blurb: 'The biggest boards there are. Probably not impossible.',
+      blurb: 'Enormous mazes of short, tangled arrows. Probably not impossible.',
       cols: [31, 34], rows: [42, 46],
       shortChance: [0.08, 0.06], longChance: [0.56, 0.62],
       medLen: [[10, 16], [11, 18]], longLen: [[28, 56], [32, 64]],
@@ -148,6 +148,19 @@
       maxFreeRatio: [0.13, 0.1], minDepth: [22, 26],
       shapes: ['rect', 'rect', 'hole'],
       maxAttempts: 16, acceptFirstFull: true,
+    },
+    // Zen only (the campaign stops at Impossible): a giant board of short arrows, 250+ of them.
+    inconceivable: {
+      id: 'inconceivable', label: 'Inconceivable', rank: 8,
+      blurb: 'A giant board with 250+ arrows. Bring snacks.',
+      cols: [35, 38], rows: [47, 51],
+      shortChance: [0.08, 0.06], longChance: [0.56, 0.62],
+      medLen: [[10, 16], [11, 18]], longLen: [[28, 56], [32, 64]],
+      segMin: [1, 1], segMax: [4, 5], maxBends: [26, 36],
+      blockBias: [3.6, 4], candidates: [24, 28],
+      maxFreeRatio: [0.12, 0.09], minDepth: [24, 28],
+      shapes: ['rect'], // always the full rectangle, so it never drops below 250 arrows
+      maxAttempts: 12, acceptFirstFull: true,
     },
   };
   const DIFFICULTY_ORDER = Object.keys(DIFFICULTIES).sort((a, b) => DIFFICULTIES[a].rank - DIFFICULTIES[b].rank);
@@ -1043,10 +1056,17 @@
     longLen: [Math.max(5, Math.round(p.longLen[0] * 0.35)), Math.max(7, Math.round(p.longLen[1] * 0.35))],
     maxBends: Math.max(3, Math.round(p.maxBends * 0.5)),
   });
-  const ZEN_TUNE = { hard: shorten, expert: shorten, nightmare: shorten, insane: shorten, impossible: shorten };
-  const ZEN_TIGHT_VERSION = 't4'; // t4: shorter arrows, flips and hand-offs, every head points straight // bump if tightening changes, so saved Zen boards are rebuilt
-  const TIGHT_TRIES = { hard: 4, expert: 4, nightmare: 3, insane: 4, impossible: 3 };
-  const TIGHT_FREE = { hard: 0.16, expert: 0.08, nightmare: 0.07, insane: 0.06, impossible: 0.05 };
+  // Insane and Impossible go a step further: even shorter arrows, so more of them and longer chains.
+  const shorter = (fm, fl, fll, fb) => (p) => ({
+    medLen: [Math.max(3, Math.round(p.medLen[0] * fm)), Math.max(4, Math.round(p.medLen[1] * fm))],
+    longChance: p.longChance * fl,
+    longLen: [Math.max(5, Math.round(p.longLen[0] * fll)), Math.max(7, Math.round(p.longLen[1] * fll))],
+    maxBends: Math.max(3, Math.round(p.maxBends * fb)),
+  });
+  const ZEN_TUNE = { hard: shorten, expert: shorten, nightmare: shorten, insane: shorter(0.45, 0.15, 0.28, 0.45), impossible: shorter(0.42, 0.12, 0.25, 0.4), inconceivable: shorter(0.4, 0.1, 0.24, 0.38) };
+  const ZEN_TIGHT_VERSION = 't5'; // t5: shorter arrows (Insane/Impossible shortest), flips and hand-offs, straight heads // bump if tightening changes, so saved Zen boards are rebuilt
+  const TIGHT_TRIES = { hard: 4, expert: 4, nightmare: 3, insane: 5, impossible: 4, inconceivable: 3 };
+  const TIGHT_FREE = { hard: 0.16, expert: 0.08, nightmare: 0.07, insane: 0.07, impossible: 0.06, inconceivable: 0.05 };
   function tighten(best, params, ratio, rng) {
     const { cols, rows } = params;
     const arrows = best.arrows;

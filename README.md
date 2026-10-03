@@ -26,12 +26,18 @@ and it appears in Zen automatically.
 ## Zen tightening (Hard and up)
 - Zen Hard and up (and campaign 71+) use shorter arrows: medium arrows about half as long, few long
   ones, and the fill step's length cap follows suit (longest arrow ~13–25 instead of ~30–65).
+  Insane and Impossible use the shortest arrows (about 135 and 185 arrows per board).
 - After a Zen board on Hard and up is built, free arrows are made blocked where possible: the arrow
   is flipped end-for-end, or its head square is handed to a neighbour's tail. Each change is kept
   only if the exact solver still proves the board solvable. Every head points the way its last step
   goes (no turned heads). Campaign levels 71+ (Hard tier and up) get the same tightening;
   campaign levels 1–70 and Daily boards are not changed.
 - Free at the start, roughly: Hard 18%, Expert 14%, Nightmare 12%, Insane 10%, Impossible 11%.
+
+## Inconceivable (Zen only)
+- An eighth difficulty above Impossible, for Zen 2D and 3D. 2D boards are always a full 35–38 × 47–51
+  rectangle of short arrows: 250–290 arrows. 3D: up to 10×10×10 shapes, about 130 arrows.
+- The campaign still ends at Impossible. Clearing one earns the "Inconceivable!" achievement.
 
 ## Developer tools
 Settings → tap the version line five times → turn on Developer tools (or open with `#debug`).
