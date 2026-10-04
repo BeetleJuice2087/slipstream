@@ -2515,6 +2515,12 @@
     return { xp, coins, bonus, before, after, levelUp: after.level > before.level };
   }
   /** One-time catch-up so players who already cleared boards don't start at Level 1. */
+  /** When the campaign grows (Inconceivable added levels 151–160), players
+      who had already cleared the old last level get the next one opened. */
+  function catchUpCampaign() {
+    const c = Save.data.campaign;
+    while (c.unlocked < E.CAMPAIGN_LENGTH && c.levels[c.unlocked] && c.levels[c.unlocked].completed) c.unlocked++;
+  }
   function migrateProgress() {
     const pr = Save.data.progress;
     if (pr.migrated) return null;
@@ -2535,7 +2541,7 @@
      ACHIEVEMENTS (stored as milestones) — one-time goals with a coin bonus. Each has a progress
      function returning [done, goal]; earned ones are stored by id.
      ====================================================================== */
-  const TIER_BONUS = { easy: 50, medium: 75, hard: 100, expert: 150, nightmare: 200, insane: 250, impossible: 400 };
+  const TIER_BONUS = { easy: 50, medium: 75, hard: 100, expert: 150, nightmare: 200, insane: 250, impossible: 400, inconceivable: 600 };
   const tierDone = (tr) => { const lv = Save.data.campaign.levels; let n = 0; for (let L = tr.from; L <= tr.to; L++) if (lv[L] && lv[L].completed) n++; return n; };
   const zenTotal = () => Object.values(Save.data.zen.boards).reduce((a, b) => a + b, 0);
   const MILESTONES = [
@@ -2718,7 +2724,7 @@
     currentScreen = name;
     Save.data.route = name;
     if (name !== 'game') {
-      document.title = 'Arrow Escape';
+      document.title = 'Arrow Escape: All-In-One';
       $('#complete-overlay').hidden = true;
       clearTimeout(zenTimer);
     }
@@ -4112,6 +4118,7 @@
     Save.data.route = 'home';
     Save.data.seenHowTo = true;
     migrateStars();
+    catchUpCampaign();
     migrateProgress();
     checkMilestones();
     Save.write();
@@ -4329,6 +4336,7 @@
     Save.load();
     if (/debug/.test(location.hash)) Save.data.settings.dev = true;
     migrateStars();
+    catchUpCampaign();
     const caughtUp = migrateProgress();
     const bootMilestones = checkMilestones();
     if (caughtUp || bootMilestones.length) Save.write();

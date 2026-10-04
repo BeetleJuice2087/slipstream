@@ -1,6 +1,6 @@
 {
-  "name": "Slipstream",
-  "short_name": "Slipstream",
+  "name": "Arrow Escape: All-In-One",
+  "short_name": "Arrow Escape",
   "description": "Arrow-escape puzzles: tap an arrow and it flies. Find the order that clears the board.",
   "id": "./",
   "start_url": "./",
@@ -10,8 +10,21 @@
   "background_color": "#121329",
   "theme_color": "#121329",
   "icons": [
-    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ]
 }

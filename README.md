@@ -1,4 +1,4 @@
-# Arrow Escape
+# Arrow Escape: All-In-One
 
 (Formerly "Slipstream". Saves, backups and the service-worker cache keep the old internal name so existing progress carries over.)
 
