@@ -1028,19 +1028,19 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
   --l0: #ba0031; --l1: #ff4d00; --l2: #9e7b00; --l3: #00a400; --l4: #007e9a; --l5: #3f5eff; --l6: #b32bff; --l7: #ff00b6; }
 .skin.th-jewel { --d0: #0086fc; --d1: #4ac2e7; --d2: #5ada63; --d3: #ffd300; --d4: #ff8905; --d5: #ff3259; --d6: #b478ff; --d7: #f919cc;
   --l0: #001b84; --l1: #3382ab; --l2: #037100; --l3: #ab8800; --l4: #ff3937; --l5: #901913; --l6: #6928d2; --l7: #c6009d; }
-.skin.th-autumn { --d0: #fde0df; --d1: #dc4400; --d2: #f4d214; --d3: #e50180; --d4: #7eb30e; --d5: #d68c00; --d6: #bd78a0; --d7: #ffa397;
-  --l0: #bc686e; --l1: #522400; --l2: #9b8501; --l3: #b50164; --l4: #3d5d01; --l5: #8f4200; --l6: #6a0057; --l7: #ff0800; }
+.skin.th-autumn { --d0: #c9a46b; --d1: #ff4a3a; --d2: #d9661a; --d3: #ff8a1f; --d4: #ffb347; --d5: #ffe08a; --d6: #a8c03e; --d7: #e0527a;
+  --l0: #472f05; --l1: #861e00; --l2: #af3605; --l3: #dd4700; --l4: #ad6603; --l5: #7f4f04; --l6: #546e1e; --l7: #771e53; }
 .skin.th-berry { --d0: #ffdee8; --d1: #af6ba5; --d2: #a6b0ff; --d3: #fd004e; --d4: #4572fe; --d5: #ff927d; --d6: #b517fe; --d7: #ff6efe;
   --l0: #ff0289; --l1: #53005f; --l2: #8a79ff; --l3: #99032c; --l4: #1600b1; --l5: #b66b5c; --l6: #635594; --l7: #b300c6; }
-.skin.th-aurora { --d0: #2dfe34; --d1: #00a075; --d2: #1ffffb; --d3: #14b8ff; --d4: #6667ff; --d5: #d58ffd; --d6: #bdc56c; --d7: #ffdafd;
-  --l0: #22af35; --l1: #077152; --l2: #0299b6; --l3: #004473; --l4: #1f59f7; --l5: #8621cb; --l6: #153d00; --l7: #ba5f9b; }
+.skin.th-aurora { --d0: #49f09e; --d1: #03caaf; --d2: #58b4f5; --d3: #a594ff; --d4: #cf5cf5; --d5: #c8ffe9; --d6: #7fe6ff; --d7: #ff7ad9;
+  --l0: #059a5e; --l1: #06775d; --l2: #076892; --l3: #514aab; --l4: #64257c; --l5: #1e3a7a; --l6: #018eb4; --l7: #b0258f; }
 .skin { --a0: var(--d0); --a1: var(--d1); --a2: var(--d2); --a3: var(--d3); --a4: var(--d4); --a5: var(--d5); --a6: var(--d6); --a7: var(--d7); }
 .skin.tone-light { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .skin.tone-auto { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); } }
 :root[data-theme="light"] .skin.tone-auto { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); }
 .skin.bg-midnight { --board: #0a0b1f; --dot: #555ba8; --line: #23275a; }
-.skin.bg-deepsea { --board: #062331; --dot: #3b7d96; --line: #12384a; }
-.skin.bg-pine { --board: #0d2219; --dot: #457d61; --line: #1b3a2d; }
+.skin.bg-deepsea { --board: #015482; --dot: #4d93bd; --line: #0e6593; }
+.skin.bg-pine { --board: #315442; --dot: #6e9a82; --line: #3e6452; }
 .skin.bg-paper { --board: #fbf5e6; --dot: #bfa874; --line: #e6dabd; }
 .skin.bg-blush { --board: #f2d0c9; --dot: #c4948a; --line: #e5bcb3; }
 .skin.bg-sand { --board: #f4ecdc; --dot: #c2a77a; --line: #e4d6bb; }
