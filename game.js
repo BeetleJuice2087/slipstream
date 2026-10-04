@@ -66,6 +66,7 @@
       campaign: { unlocked: 1, levels: {}, bonus: {} },
       daily: { history: {}, longestStreak: 0, unlocked: {} }, // unlocked: past days bought with coins
       startedOn: null, // first day this player opened the game
+      timed: { runs: 0, boards: 0, arrows: 0, best: {} }, // Time Attack: best[diff] = { boards, arrows, at }
       pictures: { done: {} }, // picture index -> { completed, stars, perfect, bestTime, plays, clears }
       zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [], dim: '2d',
         boards3d: {}, perfect3d: 0, arrows3d: 0 }, // the 3D share of the totals above (2D = total − 3D)
@@ -408,6 +409,9 @@
       { id: 'forest', name: 'Forest', price: 150 },
       { id: 'neon', name: 'Neon', price: 200 },
       { id: 'jewel', name: 'Jewel', price: 300 },
+      { id: 'autumn', name: 'Autumn', price: 150 },
+      { id: 'berry', name: 'Berry', price: 180 },
+      { id: 'aurora', name: 'Aurora', price: 250 },
     ],
     board: [
       { id: 'default', name: 'Default', price: 0, tone: 'auto' },
@@ -416,6 +420,11 @@
       { id: 'blush', name: 'Blush', price: 120, tone: 'light' },
       { id: 'deepsea', name: 'Deep Sea', price: 150, tone: 'dark' },
       { id: 'pine', name: 'Pine', price: 150, tone: 'dark' },
+      { id: 'sand', name: 'Sand', price: 100, tone: 'light' },
+      { id: 'lavender', name: 'Lavender', price: 120, tone: 'mid' },
+      { id: 'mint', name: 'Mint', price: 120, tone: 'light' },
+      { id: 'plum', name: 'Plum', price: 150, tone: 'mid' },
+      { id: 'charcoal', name: 'Charcoal', price: 180, tone: 'dark' },
     ],
     trail: [
       { id: 'classic', name: 'Classic', price: 0, desc: 'A soft streak' },
@@ -423,6 +432,9 @@
       { id: 'sparkle', name: 'Sparkle', price: 150, desc: 'Leaves glitter behind' },
       { id: 'firework', name: 'Firework', price: 200, desc: 'Big burst at the edge' },
       { id: 'rainbow', name: 'Rainbow', price: 250, desc: 'A striped rainbow tail' },
+      { id: 'bubbles', name: 'Bubbles', price: 180, desc: 'Floating bubbles drift up' },
+      { id: 'hearts', name: 'Hearts', price: 220, desc: 'Leaves little hearts' },
+      { id: 'gold', name: 'Gold', price: 400, desc: 'A golden tail and gold dust' },
     ],
   };
   const STYLE_KINDS = [['arrows', 'Arrow colors'], ['board', 'Board'], ['trail', 'Flight trail']];
@@ -437,9 +449,13 @@
     const lightBoard = b.tone === 'light' || (b.tone === 'auto' && !!(lightQuery && lightQuery.matches));
     const mode = Save.data.settings.outline || 'auto';
     const cvd = !!Save.data.settings.colorblind && !ignoreCvd;
-    const outline = mode === 'on' || (mode === 'auto' && (OUTLINED_THEMES.includes(th) || cvd) && lightBoard);
+    // Mid-tone boards (Lavender, Plum) sit between light and dark, so no
+    // palette stands out on its own: they use the bright palette and always
+    // get a dark outline ring (unless outlines are turned off).
+    const mid = b.tone === 'mid';
+    const outline = mode === 'on' || (mode === 'auto' && (mid || ((OUTLINED_THEMES.includes(th) || cvd) && lightBoard)));
     svg.setAttribute('class', svg.getAttribute('class').replace(/\s*\b(skin|th-\S+|bg-\S+|tone-\S+|outline-on|on-dark|cvd)\b/g, '').trim() +
-      ` skin th-${th} bg-${b.id} tone-${b.tone}` + (outline ? ' outline-on' : '') + (lightBoard ? '' : ' on-dark') + (cvd ? ' cvd' : ''));
+      ` skin th-${th} bg-${b.id} tone-${b.tone}` + (outline ? ' outline-on' : '') + (lightBoard || mid ? '' : ' on-dark') + (cvd ? ' cvd' : ''));
   }
   if (lightQuery && lightQuery.addEventListener) lightQuery.addEventListener('change', () => {
     for (const el of document.querySelectorAll('.skin')) if (el.id) applySkin(el);
@@ -464,7 +480,11 @@
     sparkle:  { len: 2, opacity: 0.3, sparkle: true },
     firework: { len: 2, opacity: 0.35, firework: true },
     rainbow:  { len: 6, opacity: 0.95, width: 1, rainbow: true },
+    bubbles:  { len: 1.6, opacity: 0.28, specks: 'bubble', every: 55 },
+    hearts:   { len: 1.6, opacity: 0.3, specks: 'heart', every: 60 },
+    gold:     { len: 4.2, opacity: 0.85, width: 0.95, color: '#e8b030', specks: 'gold', every: 30 },
   };
+  const HEART_PINK = '#ff5c8a', GOLD = '#e8b030', GOLD_LIGHT = '#fff1b8';
   const RAINBOW = [0, 1, 2, 3, 4, 6]; // palette slots: red, orange, yellow-green, teal, blue, purple
   const EXIT_GLIDE_CELLS = 2.6;   // how far past the edge an arrow travels before it's gone
 
@@ -659,6 +679,7 @@
       const tr = TRAILS[Save.data.progress.equip.trail] || TRAILS.classic;
       let lastSpark = 0;
       node.trail.style.display = '';
+      if (tr.color) node.trail.style.stroke = tr.color;
       if (tr.width) node.trail.style.strokeWidth = `calc(var(--aw) * ${tr.width})`;
       // Rainbow: the tail is split into bands, red at the arrow end through purple.
       let bandGroup = null;
@@ -690,9 +711,9 @@
           });
           bandGroup.style.opacity = String(tr.opacity * (1 - t * 0.3));
         }
-        if (tr.sparkle && now - lastSpark > 32 && off < fadeFrom) {
+        if ((tr.sparkle || tr.specks) && now - lastSpark > (tr.every || 32) && off < fadeFrom) {
           lastSpark = now;
-          this.sparkle(this.pointAt(geo, off + Math.random() * 0.6), node.a.color);
+          this.sparkle(this.pointAt(geo, off + Math.random() * 0.6), node.a.color, tr.specks);
         }
         // Fully visible while any part is on the board; fade only past the edge.
         node.g.style.opacity = off <= fadeFrom ? '1' : String(Math.max(0, 1 - (off - fadeFrom) / EXIT_GLIDE_CELLS));
@@ -706,15 +727,33 @@
       });
     }
 
-    /** A glitter speck left behind by the Sparkle trail. */
-    sparkle(pt, color) {
-      const c = s('circle', { r: 0.045 + Math.random() * 0.05, cx: pt[0] + (Math.random() - 0.5) * 0.35, cy: pt[1] + (Math.random() - 0.5) * 0.35 });
-      c.style.fill = Math.random() < 0.35 ? '#fff' : `var(--a${(color + Math.floor(Math.random() * 3)) % 8})`;
+    /** A speck left behind by a trail: glitter (Sparkle), gold dust,
+        a bubble that floats up, or a little heart that rises and fades. */
+    sparkle(pt, color, kind) {
+      const x = pt[0] + (Math.random() - 0.5) * 0.35, y = pt[1] + (Math.random() - 0.5) * 0.35;
+      let c, life = 380 + Math.random() * 220, rise = 0, grow = 0;
+      if (kind === 'bubble') {
+        c = s('circle', { r: 0.08 + Math.random() * 0.07, cx: x, cy: y });
+        c.style.fill = 'none'; c.style.stroke = `var(--a${color % 8})`; c.style.strokeWidth = '0.035';
+        life = 650 + Math.random() * 300; rise = 0.55; grow = 0.6;
+      } else if (kind === 'heart') {
+        const k = 0.12 + Math.random() * 0.06;
+        c = s('path', { d: 'M0 0.35C-0.5 0 -0.55 -0.35 -0.3 -0.45C-0.12 -0.52 0 -0.38 0 -0.28C0 -0.38 0.12 -0.52 0.3 -0.45C0.55 -0.35 0.5 0 0 0.35Z' });
+        c.style.fill = Math.random() < 0.5 ? HEART_PINK : `var(--a${color % 8})`;
+        c.dataset.k = k; life = 700 + Math.random() * 300; rise = 0.45;
+        c.setAttribute('transform', `translate(${x} ${y}) scale(${k * 2})`);
+      } else {
+        c = s('circle', { r: 0.045 + Math.random() * 0.05, cx: x, cy: y });
+        c.style.fill = kind === 'gold' ? (Math.random() < 0.4 ? GOLD_LIGHT : GOLD)
+          : Math.random() < 0.35 ? '#fff' : `var(--a${(color + Math.floor(Math.random() * 3)) % 8})`;
+      }
       this.gFx.append(c);
-      const start = performance.now(), life = 380 + Math.random() * 220;
+      const start = performance.now(), r0 = +c.getAttribute('r') || 0;
       this.addAnim((now) => {
         const t = (now - start) / life;
         c.style.opacity = String(Math.max(0, 1 - t));
+        if (kind === 'heart') c.setAttribute('transform', `translate(${x} ${y - rise * t}) scale(${c.dataset.k * 2 * (1 + 0.2 * t)})`);
+        else if (rise) { c.setAttribute('cy', y - rise * t); c.setAttribute('r', r0 * (1 + grow * t)); }
         if (t >= 1) { c.remove(); return false; }
         return true;
       });
@@ -1442,7 +1481,7 @@
         });
         return;
       }
-      this.strokeRuns(this.runs(geo, from, fl.off), cam, this.aw * (tr.width || 0.7), this.col.arrows[geo.a.color % 8], tr.opacity * fl.fade);
+      this.strokeRuns(this.runs(geo, from, fl.off), cam, this.aw * (tr.width || 0.7), tr.color ? hexToRgb(tr.color) : this.col.arrows[geo.a.color % 8], tr.opacity * fl.fade);
     }
     drawRay(fx, cam) {
       const ctx = this.ctx;
@@ -1466,9 +1505,24 @@
       const ctx = this.ctx;
       if (fx.kind === 'dot') {
         const q = this.project(fx.p, cam);
-        ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(1, fx.r * cam.S * q[2]), 0, Math.PI * 2);
-        ctx.fillStyle = fx.white ? `rgba(255,255,255,${fx.a})` : rgbToCss(this.col.arrows[fx.color % 8], fx.a);
-        ctx.fill();
+        const rr = Math.max(1, fx.r * cam.S * q[2]);
+        const css = fx.white ? `rgba(255,255,255,${fx.a})` : rgbToCss(fx.rgb || this.col.arrows[fx.color % 8], fx.a);
+        ctx.beginPath();
+        if (fx.shape === 'heart') {
+          const x = q[0], y = q[1];
+          ctx.moveTo(x, y + rr * 0.7);
+          ctx.bezierCurveTo(x - rr * 1.1, y, x - rr * 1.1, y - rr * 0.9, x - rr * 0.6, y - rr * 0.95);
+          ctx.bezierCurveTo(x - rr * 0.25, y - rr, x, y - rr * 0.75, x, y - rr * 0.55);
+          ctx.bezierCurveTo(x, y - rr * 0.75, x + rr * 0.25, y - rr, x + rr * 0.6, y - rr * 0.95);
+          ctx.bezierCurveTo(x + rr * 1.1, y - rr * 0.9, x + rr * 1.1, y, x, y + rr * 0.7);
+          ctx.fillStyle = css; ctx.fill();
+        } else if (fx.shape === 'bubble') {
+          ctx.arc(q[0], q[1], rr * (1.6 - 0.6 * fx.a), 0, Math.PI * 2);
+          ctx.lineWidth = Math.max(1, 0.035 * cam.S * q[2]); ctx.strokeStyle = css; ctx.stroke();
+        } else {
+          ctx.arc(q[0], q[1], rr, 0, Math.PI * 2);
+          ctx.fillStyle = css; ctx.fill();
+        }
       }
     }
 
@@ -1502,10 +1556,15 @@
         fl.off = total * e;
         fl.fade = 1 - t;
         fl.alpha = fl.off <= fadeFrom ? 1 : Math.max(0, 1 - (fl.off - fadeFrom) / EXIT_GLIDE_CELLS);
-        if (tr.sparkle && now - lastSpark > 32 && fl.off < fadeFrom) {
+        if ((tr.sparkle || tr.specks) && now - lastSpark > (tr.every || 32) && fl.off < fadeFrom) {
           lastSpark = now;
           const p = this.pointAt(geo, fl.off + Math.random() * 0.6).p;
-          this.particle([p[0] + (Math.random() - 0.5) * 0.3, p[1] + (Math.random() - 0.5) * 0.3, p[2] + (Math.random() - 0.5) * 0.3], [0, 0, 0], geo.a.color + Math.floor(Math.random() * 3), 0.05 + Math.random() * 0.05, 400, Math.random() < 0.35);
+          const q = [p[0] + (Math.random() - 0.5) * 0.3, p[1] + (Math.random() - 0.5) * 0.3, p[2] + (Math.random() - 0.5) * 0.3];
+          const k = tr.specks, up = geo.normal;
+          if (k === 'bubble') this.particle(q, [up[0] * 0.9, up[1] * 0.9, up[2] * 0.9], geo.a.color, 0.1 + Math.random() * 0.06, 800, false, 'bubble');
+          else if (k === 'heart') this.particle(q, [up[0] * 0.7, up[1] * 0.7, up[2] * 0.7], geo.a.color, 0.15 + Math.random() * 0.05, 850, false, 'heart', Math.random() < 0.5 ? hexToRgb(HEART_PINK) : null);
+          else if (k === 'gold') this.particle(q, [0, 0, 0], 0, 0.05 + Math.random() * 0.05, 420, false, 'dot', hexToRgb(Math.random() < 0.4 ? GOLD_LIGHT : GOLD));
+          else this.particle(q, [0, 0, 0], geo.a.color + Math.floor(Math.random() * 3), 0.05 + Math.random() * 0.05, 400, Math.random() < 0.35);
         }
         if (!burst && fl.off >= edge) {
           burst = true;
@@ -1524,8 +1583,8 @@
       });
       this.kick();
     }
-    particle(p, v, color, r, life, white) {
-      const fx = { kind: 'dot', p, color, r, a: 1, white };
+    particle(p, v, color, r, life, white, shape, rgb) {
+      const fx = { kind: 'dot', p, color, r, a: 1, white, shape: shape || 'dot', rgb };
       this.fx.push(fx);
       const start = performance.now(), p0 = p.slice();
       this.anims.add((now) => {
@@ -1862,12 +1921,27 @@
     if (mode === 'bonus') diff = SlipCube.bonusCube(Number(key)).diff;
     if (mode === 'picture') diff = PIC.pictureLevel(Number(key)).diff;
     if (mode === 'daily') diff = E.dailyInfo(key).diff;
-    return { mode, key: String(key), diff, gen: genFor(key, mode), hearts: usesHearts(mode) ? MAX_HEARTS : null, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0, stuck: [], day: dateKey() };
+    return { mode, key: String(key), diff, gen: genFor(key, mode), hearts: usesHearts(mode) ? MAX_HEARTS : null, undo: [], undos: 0, removed: [], taps: 0, success: 0, blocked: 0, hints: 0, elapsed: 0, assisted: false, done: false, total: 0, stuck: [], day: dateKey() };
   }
   const counted = (sess) => sess.mode !== 'debug' && !sess.assisted;
   /* Hearts: Campaign and Daily allow three blocked taps. The third ends
      the run and the board resets. Zen and the sandbox have no limit. */
   const MAX_HEARTS = 3;
+  /* Undo (hearts modes): take back your last blocked tap for coins. The
+     heart comes back and the arrow stops waiting. It doesn't wipe the tap
+     from the board's record, so stars and Perfect stay as they were. */
+  const UNDO_COST = 10;
+  /* TIME ATTACK — 3 minutes to clear as many 2D boards as you can.
+     A blocked tap costs 5 seconds. No hints, no hearts. Boards come from
+     the Zen generator with fresh random seeds; the next one is built in the
+     background while you play, so there's no wait between boards. */
+  const TIMED_MS = 180000, TIMED_PENALTY = 5000, TIMED_HURRY = 15000;
+  const TIMED_DIFFS = ['easy', 'medium', 'hard', 'expert'];
+  const TIMED_COINS = { easy: 1, medium: 2, hard: 4, expert: 6 }; // coins per board cleared
+  const TIMED_INFO = { easy: 'Small, quick boards. Go for a big count.', medium: 'A little bigger. Keep a steady pace.', hard: 'Bigger mazes. Every blocked tap hurts.', expert: 'Big boards. Clearing even a few is a win.' };
+  const timedSeed = () => 'ta.' + newZenSeed();
+  const timedBest = (d) => (Save.data.timed.best[d] || null);
+  const timedBestAny = () => TIMED_DIFFS.reduce((m, d) => Math.max(m, (timedBest(d) || {}).boards || 0), 0);
   function usesHearts(mode) { return mode === 'campaign' || mode === 'bonus' || mode === 'daily'; }
   const HEART_PATH = 'M12 20.5s-7.3-4.5-9.3-9C1.3 8.3 3.3 4.5 6.9 4.5c2.1 0 3.6 1.2 5.1 3 1.5-1.8 3-3 5.1-3 3.6 0 5.6 3.8 4.2 7-2 4.5-9.3 9-9.3 9z';
   function renderHearts(sess, lostIndex) {
@@ -1910,10 +1984,10 @@
       if (matches && !opts.fresh) sess = act;
       else {
         sess = newSession(mode, key, diff);
-        recordStart(sess);
+        if (mode !== 'timed') recordStart(sess);
       }
       if (usesHearts(sess.mode) && sess.hearts == null) sess.hearts = Math.max(1, MAX_HEARTS - sess.blocked);
-      Save.data.active = sess;
+      Save.data.active = mode === 'timed' ? null : sess; // a Time Attack board can't be resumed later
       this.session = sess;
       this.stopSolve();
       $('#debug-out').textContent = '';
@@ -1947,6 +2021,7 @@
         this.updateHud();
         this.updateDebug();
         Save.write();
+        if (sess.mode === 'timed') this.prepareNextTimed();
         if (this.board.count === 0) this.finish();
         if (sess.mode === 'bonus' && !Save.data.seenBonusTip) {
           Save.data.seenBonusTip = true;
@@ -1982,6 +2057,7 @@
       }
       else if (sess.mode === 'daily') { mode = 'Daily Puzzle'; name = shortDate(sess.key); }
       else if (sess.mode === 'zen') { mode = isCubeKey(sess.key) ? 'Zen · 3D' : 'Zen'; name = 'Board ' + ((Save.data.zen.session.count || 0) + 1); }
+      else if (sess.mode === 'timed') { mode = 'Time Attack'; name = 'Board ' + ((this.run ? this.run.boards : 0) + 1); }
       else { mode = isCubeKey(sess.key) ? 'Sandbox 3D · not counted' : 'Sandbox · not counted'; name = 'Seed ' + (isCubeKey(sess.key) ? String(sess.key).slice(3) : sess.key); }
       $('#game-mode').textContent = mode;
       $('#game-name').textContent = name;
@@ -1994,16 +2070,82 @@
       const total = this.puzzle && this.board ? this.puzzle.arrows.length : sess.total;
       const left = this.board ? this.board.count : '…';
       $('#hud-left').textContent = left;
-      $('#hud-time').textContent = fmtTime(sess.elapsed);
-      $('#hud-blocked').textContent = sess.blocked;
+      const timed = sess.mode === 'timed';
+      $('#screen-game').classList.toggle('is-timed', timed);
+      $('#hud-time-label').textContent = timed ? 'left' : 'time';
+      $('#hud-hints-item').hidden = timed;
+      $('#hud-boards-item').hidden = !timed;
+      $('#btn-hint').hidden = timed;
+      $('#btn-restart span').textContent = timed ? 'New run' : 'Restart';
+      $('#btn-restart').setAttribute('aria-label', timed ? 'New run' : 'Restart');
+      if (timed && this.run) {
+        $('#hud-boards').textContent = this.run.boards;
+        this.showTimeLeft();
+      } else $('#hud-time').textContent = fmtTime(sess.elapsed);
+      $('#hud-blocked').textContent = timed && this.run ? this.run.blocked : sess.blocked;
       $('#hud-hints').textContent = sess.hints;
       $('#hud-bar').style.width = total && this.board ? `${pct(total - this.board.count, total)}%` : '0%';
       const flag = $('#hud-perfect');
       const onTrack = sess.blocked === 0 && sess.hints === 0 && !sess.assisted;
       flag.textContent = onTrack ? '★ Perfect run' : 'No perfect';
       flag.classList.toggle('is-lost', !onTrack);
-      flag.hidden = sess.mode === 'debug';
+      flag.hidden = sess.mode === 'debug' || timed;
       $('#btn-hint').disabled = !this.board || sess.done;
+      $('#game-coins').textContent = fmtNum(Save.data.progress.coins);
+      const ub = $('#btn-undo');
+      ub.hidden = !usesHearts(sess.mode);
+      $('.game-dock').classList.toggle('has-undo', !ub.hidden);
+      const canUndo = this.canUndo();
+      ub.disabled = !canUndo || sess.done;
+      ub.classList.toggle('is-ready', canUndo && !sess.done);
+    },
+    /** True when there's a blocked tap to take back and a heart to get back. */
+    canUndo() {
+      const sess = this.session;
+      return !!(sess && this.board && usesHearts(sess.mode) && (sess.undo || []).length && sess.hearts < MAX_HEARTS);
+    },
+    /** Undo the last blocked tap for UNDO_COST coins. Also works from the
+        Out of hearts screen, where it puts you straight back in the board. */
+    async undo() {
+      const sess = this.session;
+      if (!this.canUndo()) return false;
+      const fromFail = !!sess.failed;
+      if (!fromFail && (sess.done || this.inputLocked())) return false;
+      const pr = Save.data.progress;
+      if (pr.coins < UNDO_COST) {
+        toast(`Undo costs ${UNDO_COST} coins. You have ${fmtNum(pr.coins)}.`);
+        return false;
+      }
+      pr.coins -= UNDO_COST;
+      pr.coinsSpent = (pr.coinsSpent || 0) + UNDO_COST;
+      const id = sess.undo.pop();
+      sess.hearts = Math.min(MAX_HEARTS, sess.hearts + 1);
+      sess.undos = (sess.undos || 0) + 1;
+      if (counted(sess)) Save.data.stats.undos = (Save.data.stats.undos || 0) + 1;
+      const k = (sess.stuck || []).indexOf(id);
+      if (k >= 0) { sess.stuck.splice(k, 1); if (this.board.alive.has(id)) this.view.setStuck(id, false); }
+      if (fromFail) {
+        // Take back the loss that was recorded when the hearts ran out.
+        sess.done = false;
+        sess.failed = false;
+        if (counted(sess)) {
+          const st = Save.data.stats;
+          st.failed = Math.max(0, (st.failed || 0) - 1);
+          const rec = sess.mode === 'daily' ? Save.data.daily.history[sess.key] : levelStore(sess.mode)[sess.key];
+          if (rec && rec.fails) rec.fails--;
+        }
+        Save.data.active = sess;
+        $('#complete-overlay').hidden = true;
+        $('.complete-sheet').classList.remove('is-failed');
+      }
+      renderHearts(sess);
+      const pill = $('#game-coins-pill');
+      pill.classList.remove('is-bump'); void pill.offsetWidth; pill.classList.add('is-bump');
+      Sound.play('hint');
+      announce(`Undone. Heart back, ${sess.hearts} of ${MAX_HEARTS}. ${UNDO_COST} coins spent.`);
+      this.updateHud();
+      Save.write();
+      return true;
     },
 
     release(id, auto) {
@@ -2021,6 +2163,14 @@
         if (auto) return;
         sess.blocked++;
         if (count) st.blocked++;
+        if (usesHearts(sess.mode)) (sess.undo || (sess.undo = [])).push(id);
+        if (sess.mode === 'timed' && this.run) {
+          this.run.blocked++;
+          this.run.left -= TIMED_PENALTY;
+          const pen = $('#hud-penalty');
+          pen.textContent = `−${TIMED_PENALTY / 1000}s`;
+          pen.classList.remove('is-on'); void pen.offsetWidth; pen.classList.add('is-on');
+        }
         this.combo = 0;
         this.view.blocked(id, blocker);
         // Auto-release: the arrow turns red and waits; it flies out by itself
@@ -2030,6 +2180,7 @@
           this.view.setStuck(id, true);
         }
         Sound.play('blocked');
+        if (sess.mode === 'timed' && this.run && this.run.left <= 0) { this.updateHud(); this.endRun(); return; }
         if (navigator.vibrate && !reducedMotion()) { try { navigator.vibrate(18); } catch (e) { /* ignore */ } }
         if (usesHearts(sess.mode) && !sess.assisted) {
           sess.hearts = Math.max(0, sess.hearts - 1);
@@ -2047,12 +2198,13 @@
         if (wasStuck >= 0) { sess.stuck.splice(wasStuck, 1); this.view.setStuck(id, false); }
         this.board.remove(id);
         sess.removed.push(id);
-        sess.success++;
+        if (!auto) sess.success++;
         if (count) {
-          st.success++;
+          if (!auto) st.success++;
           st.arrows++;
           if (sess.mode === 'zen') { Save.data.zen.arrows++; if (isCubeKey(sess.key)) Save.data.zen.arrows3d++; }
         }
+        if (sess.mode === 'timed' && this.run) this.run.arrows++;
         this.combo++;
         this.view.escape(id);
         Sound.play('escape', this.combo - 1);
@@ -2103,6 +2255,7 @@
     finish() {
       const sess = this.session;
       if (sess.done) return;
+      if (sess.mode === 'timed') { this.timedCleared(); return; }
       sess.done = true;
       this.stopSolve();
       const result = recordFinish(sess, this.puzzle);
@@ -2139,6 +2292,11 @@
     restart() {
       const sess = this.session;
       if (!sess) return;
+      if (sess.mode === 'timed') {
+        confirmDialog({ title: 'Start a new run?', body: '<p>This run ends without a score and the clock goes back to 3:00.</p>', ok: 'New run' })
+          .then((yes) => { if (yes) startTimed(sess.diff); });
+        return;
+      }
       confirmDialog({
         title: 'Restart this board?',
         body: '<p>All arrows return. Time, blocked taps and hints start from zero, so a perfect clear is possible again.</p>',
@@ -2151,11 +2309,79 @@
     },
 
     leave() {
+      const sess = this.session;
+      if (sess && sess.mode === 'timed' && this.run && !this.run.over) {
+        confirmDialog({ title: 'End this run?', body: '<p>You\'ll lose this run. It won\'t count toward your best.</p>', ok: 'End run' })
+          .then((yes) => { if (!yes) return; this.run = null; sess.done = true; this.stopSolve(); this.loadToken++; Save.write(); showScreen('timed'); });
+        return;
+      }
       this.stopSolve();
       this.loadToken++;
       const mode = this.session ? this.session.mode : 'home';
       Save.write();
       showScreen(mode === 'debug' ? (this.debugFrom || 'zen') : mode === 'bonus' ? 'campaign' : mode === 'picture' ? 'pictures' : mode);
+    },
+
+    /* ---------------- Time Attack ---------------- */
+    showTimeLeft() {
+      const left = Math.max(0, this.run.left);
+      $('#hud-time').textContent = fmtTime(Math.ceil(left / 1000) * 1000);
+      $('#screen-game').classList.toggle('is-hurry', left <= TIMED_HURRY && left > 0);
+    },
+    /** Build the next board now, while this one is being played. */
+    prepareNextTimed() {
+      const run = this.run;
+      if (!run || run.next) return;
+      run.next = timedSeed();
+      setTimeout(() => {
+        if (this.run !== run) return;
+        try { puzzleFor({ mode: 'timed', key: run.next, diff: run.diff }); } catch (e) { run.next = null; }
+      }, 400);
+    },
+    timedCleared() {
+      const run = this.run, sess = this.session;
+      if (!run || run.over) return;
+      sess.done = true;
+      run.boards++;
+      Sound.play('complete');
+      const fl = h('div', { class: 'timed-flash', text: `Board ${run.boards} ✓` });
+      $('#board-wrap').append(fl);
+      setTimeout(() => fl.remove(), 800);
+      announce(`Board ${run.boards} cleared.`);
+      this.updateHud();
+      setTimeout(() => {
+        if (this.run !== run || run.over || currentScreen !== 'game') return;
+        const key = run.next || timedSeed();
+        run.next = null;
+        this.open('timed', key, run.diff, { fresh: true });
+      }, reducedMotion() ? 150 : 450);
+    },
+    /** Time's up: record the run, pay out and show the result. */
+    endRun() {
+      const run = this.run, sess = this.session;
+      if (!run || run.over) return;
+      run.over = true;
+      run.left = 0;
+      if (sess) sess.done = true;
+      this.stopSolve();
+      this.showTimeLeft();
+      const T = Save.data.timed;
+      T.runs++;
+      T.boards += run.boards;
+      T.arrows += run.arrows;
+      const prev = T.best[run.diff];
+      const better = !prev || run.boards > prev.boards || (run.boards === prev.boards && run.arrows > prev.arrows);
+      if (better && (run.boards || run.arrows)) T.best[run.diff] = { boards: run.boards, arrows: run.arrows, at: new Date().toISOString() };
+      run.newBest = better && !!prev && (run.boards || run.arrows) > 0;
+      run.firstBest = !prev;
+      run.prev = prev;
+      const coins = run.boards * (TIMED_COINS[run.diff] || 1) + Math.floor(run.arrows / 10);
+      const xp = Math.round(run.arrows * 0.5) + run.boards * 3;
+      run.reward = (coins || xp) ? grant(xp, coins) : null;
+      run.milestones = checkMilestones();
+      Save.write();
+      Sound.play('fail');
+      setTimeout(() => showTimedResult(run), reducedMotion() ? 200 : 600);
     },
 
     /* ---- developer tools ---- */
@@ -2337,6 +2563,8 @@
       progress: () => [Math.min(30, Math.max(Save.data.daily.longestStreak || 0, dailyStreaks().longest)), 30] },
     { id: 'perfect-10', name: 'Flawless ten', desc: '10 perfect clears in a row', coins: 75,
       progress: () => [Math.min(10, Save.data.stats.bestPerfectStreak || 0), 10] },
+    { id: 'timed-10', name: 'Against the clock', desc: 'Clear 10 boards in one Time Attack run', coins: 75,
+      progress: () => [Math.min(10, timedBestAny()), 10] },
     { id: 'zen-100', name: 'Zen master', desc: 'Clear 100 Zen boards', coins: 75, progress: () => [Math.min(100, zenTotal()), 100] },
     { id: 'level-25', name: 'Level 25', desc: 'Reach player level 25', coins: 100,
       progress: () => [Math.min(25, levelInfo(Save.data.progress.xp).level), 25] },
@@ -2466,6 +2694,12 @@
     }
     if (res.fastest && sess.mode !== 'campaign') res.notes.push(`Fastest ${diffLabel(d)} clear yet`);
     if (perfect && st.perfectStreak > 1) res.notes.push(`${st.perfectStreak} perfect clears in a row`);
+    // Close call: cleared with only one heart left.
+    if (usesHearts(sess.mode) && sess.hearts === 1) {
+      st.closeCalls = (st.closeCalls || 0) + 1;
+      res.closeCall = true;
+      res.notes.unshift(`Close call! Cleared on your last heart (${fmtNum(st.closeCalls)} so far)`);
+    }
     const rw = rewardFor(res.late ? 'daily-late' : sess.mode, d, res.stars, !!res.replay); // no daily bonus for past days
     res.reward = grant(rw.xp, rw.coins);
     res.milestones = checkMilestones();
@@ -2551,6 +2785,10 @@
     $('#home-level').textContent = li.level;
     $('#home-xp').textContent = `${fmtNum(li.into)} / ${fmtNum(li.need)} XP`;
     $('#home-xp-bar').style.width = `${pct(li.into, li.need)}%`;
+    const nx = $('#home-next'), bonus = levelUpCoins(li.level + 1);
+    nx.innerHTML = `+${fmtNum(bonus)}${COIN_SVG}`;
+    nx.title = `+${bonus} coins when you reach Level ${li.level + 1}`;
+    nx.setAttribute('aria-label', nx.title);
     $('#home-coins').textContent = fmtNum(pr.coins);
   }
   renderers.home = function () {
@@ -2580,6 +2818,8 @@
     $('#home-campaign-sub').textContent = done ? `${done} cleared · ★ ${campaignStars()} · next up: Level ${Math.min(un, E.CAMPAIGN_LENGTH)}` : `${E.CAMPAIGN_LENGTH} levels · Easy to ${diffLabel(E.CAMPAIGN_TIERS[E.CAMPAIGN_TIERS.length - 1].diff)}`;
     $('#home-campaign-bar').style.width = `${pct(done, E.CAMPAIGN_LENGTH)}%`;
     const pf = picDone(), pn = PIC.PICTURES.length;
+    const tb = timedBestAny();
+    $('#home-timed-sub').textContent = tb ? `3 minutes · best ${tb} board${tb === 1 ? '' : 's'}` : 'Clear as many boards as you can in 3 minutes';
     $('#home-pictures-sub').textContent = pf ? `${pf} of ${pn} pictures found` : `${pn} hidden pictures to find`;
     $('#home-pictures-bar').style.width = `${pct(pf, pn)}%`;
 
@@ -2640,11 +2880,23 @@
         fx += `<path d="M${x0.toFixed(2)} ${y}H${x1.toFixed(2)}" stroke="var(--a${c})" style="stroke-width:var(--aw)" opacity="0.95" stroke-linecap="${i === n - 1 ? 'round' : 'butt'}"/>`;
       });
     } else {
-      fx += `<path d="M${tail - len} ${y}H${tail}" stroke="var(--a4)" stroke-width="${0.17 * (tr.width || 0.7)}" opacity="${tr.opacity}" stroke-linecap="round"/>`;
+      fx += `<path d="M${tail - len} ${y}H${tail}" stroke="${tr.color || 'var(--a4)'}" stroke-width="${0.17 * (tr.width || 0.7)}" opacity="${tr.opacity}" stroke-linecap="round"/>`;
     }
     if (tr.sparkle) {
       [[0.6, 0.62, 0.07], [1.2, 1.38, 0.05], [1.7, 0.8, 0.08], [2.3, 1.3, 0.06], [0.9, 1.15, 0.05], [2.6, 0.7, 0.05]]
         .forEach(([x, yy, r], i) => { fx += `<circle cx="${x}" cy="${yy}" r="${r}" fill="${i % 3 === 0 ? '#fff' : `var(--a${(4 + i) % 8})`}"/>`; });
+    }
+    if (tr.specks === 'gold') {
+      [[0.6, 0.62, 0.07], [1.2, 1.38, 0.05], [1.7, 0.8, 0.08], [2.3, 1.3, 0.06], [0.9, 1.15, 0.05], [2.6, 0.7, 0.05]]
+        .forEach(([x, yy, r], i) => { fx += `<circle cx="${x}" cy="${yy}" r="${r}" fill="${i % 3 === 0 ? GOLD_LIGHT : GOLD}"/>`; });
+    }
+    if (tr.specks === 'bubble') {
+      [[0.5, 0.45, 0.17], [1.15, 0.7, 0.12], [1.8, 0.4, 0.14], [2.4, 0.75, 0.09], [0.9, 0.2, 0.1]]
+        .forEach(([x, yy, r]) => { fx += `<circle cx="${x}" cy="${yy}" r="${r}" fill="none" stroke="var(--a4)" stroke-width="0.035"/>`; });
+    }
+    if (tr.specks === 'heart') {
+      [[0.55, 0.45, 0.32, HEART_PINK], [1.3, 0.55, 0.26, 'var(--a4)'], [2.05, 0.35, 0.3, HEART_PINK], [0.95, 0.15, 0.2, 'var(--a4)']]
+        .forEach(([x, yy, k, f]) => { fx += `<path transform="translate(${x} ${yy}) scale(${k})" fill="${f}" d="M0 0.35C-0.5 0 -0.55 -0.35 -0.3 -0.45C-0.12 -0.52 0 -0.38 0 -0.28C0 -0.38 0.12 -0.52 0.3 -0.45C0.55 -0.35 0.5 0 0 0.35Z"/>`; });
     }
     let arrow = previewArrow([[tail, y], [tail + 2, y]], 4);
     if (tr.firework) {
@@ -2672,12 +2924,7 @@
   }
   renderers.style = function () {
     const pr = Save.data.progress;
-    const li = levelInfo(pr.xp);
     $('#style-coins').textContent = fmtNum(pr.coins);
-    const lvl = $('#style-level');
-    lvl.innerHTML = `<span class="lvl-badge"><small>Level</small><b>${li.level}</b></span>` +
-      `<span class="player-mid"><span class="player-row"><span>${fmtNum(li.need - li.into)} XP to Level ${li.level + 1}</span><span>+${levelUpCoins(li.level + 1)} coins</span></span>` +
-      `<span class="xp-bar"><span style="width:${pct(li.into, li.need)}%"></span></span></span>`;
     const wrap = $('#style-sections');
     wrap.textContent = '';
     for (const [kind, title] of STYLE_KINDS) {
@@ -2987,6 +3234,62 @@
     Game.open('zen', zenPrefix(cube) + newZenSeed(), diff, { fresh: true });
   }
 
+  /* ---------------- Time Attack ---------------- */
+  renderers.timed = function () {
+    const box = $('#timed-choices');
+    box.textContent = '';
+    for (const id of TIMED_DIFFS) {
+      const b = timedBest(id);
+      box.append(h('button', { class: 'zen-choice', type: 'button', role: 'listitem', 'data-diff': id,
+        'aria-label': `Start Time Attack on ${diffLabel(id)}. ${b ? `Best ${b.boards} boards.` : 'No best yet.'}` },
+        h('span', { class: 'diff-chip diff-' + id, text: diffLabel(id) }),
+        h('p', null, TIMED_INFO[id], h('br'), h('span', { class: 'timed-best', text: `${TIMED_COINS[id]} coin${TIMED_COINS[id] > 1 ? 's' : ''} per board` })),
+        h('span', { class: 'zen-count' }, h('strong', { text: b ? fmtNum(b.boards) : '—' }), h('span', { text: 'best' }))));
+    }
+  };
+  $('#timed-choices').addEventListener('click', (e) => {
+    const b = e.target.closest('.zen-choice');
+    if (!b) return;
+    Sound.play('tap');
+    startTimed(b.dataset.diff);
+  });
+  function startTimed(diff) {
+    $('#complete-overlay').hidden = true;
+    Game.run = { diff, left: TIMED_MS, boards: 0, arrows: 0, blocked: 0, over: false, next: null };
+    Game.open('timed', timedSeed(), diff, { fresh: true });
+  }
+  function showTimedResult(run) {
+    if (currentScreen !== 'game' || Game.run !== run) return;
+    const ov = $('#complete-overlay');
+    $$('.zen-next', ov).forEach((n) => n.remove());
+    const sheet = $('.complete-sheet', ov);
+    sheet.classList.remove('is-failed');
+    sheet.classList.toggle('is-perfect', !!run.newBest);
+    $('#complete-stars').hidden = true;
+    const burst = $('.burst', ov);
+    burst.textContent = '';
+    if (run.newBest && !reducedMotion()) for (let i = 0; i < 20; i++) burst.append(h('i', { style: `--c:${i % 2 ? 'var(--gold)' : `var(--a${i % 8})`};--r:${18 * i}deg;animation-delay:${(i % 3) * 50}ms` }));
+    $('#complete-kicker').textContent = `Time Attack · ${diffLabel(run.diff)}`;
+    $('#complete-title').textContent = run.newBest ? 'New best!' : 'Time’s up!';
+    const b = timedBest(run.diff);
+    $('#complete-note').textContent = run.newBest ? `You beat your old best of ${run.prev.boards} board${run.prev.boards === 1 ? '' : 's'}.`
+      : run.firstBest && (run.boards || run.arrows) ? 'Your first Time Attack score on this difficulty.'
+      : b ? `Your best is ${b.boards} board${b.boards === 1 ? '' : 's'} (${fmtNum(b.arrows)} arrows).` : 'Clear a board to set a best.';
+    const stats = $('#complete-stats');
+    stats.textContent = '';
+    [[run.boards, 'boards'], [fmtNum(run.arrows), 'arrows'], [run.blocked, 'blocked'], [`−${(run.blocked * TIMED_PENALTY) / 1000}s`, 'penalty']]
+      .forEach(([v, k]) => stats.append(h('div', null, h('strong', { text: String(v) }), h('span', { text: k }))));
+    showReward(run.reward, run.milestones);
+    const acts = $('#complete-actions');
+    acts.textContent = '';
+    acts.append(h('button', { class: 'ghost-btn', type: 'button', text: 'Done', onclick: () => { Game.run = null; showScreen('timed'); } }));
+    acts.append(h('button', { class: 'primary-btn', type: 'button', text: 'Play again', onclick: () => startTimed(run.diff) }));
+    ov.hidden = false;
+    acts.querySelector('.primary-btn').focus();
+    if (run.newBest) Sound.play('perfect');
+    announce(`Time's up. ${run.boards} boards, ${run.arrows} arrows.${run.newBest ? ' New best!' : ''}`);
+  }
+
   /* ---------------- Stats ---------------- */
   renderers.stats = function () {
     const st = Save.data.stats;
@@ -2994,7 +3297,11 @@
     const z = Save.data.zen;
     const tot = dailyTotals();
     const sk = dailyStreaks();
-    const acc = pct(st.success, st.taps);
+    // Successful taps = taps that weren't blocked. Worked out from taps and
+    // blocked so arrows that flew out on their own (auto-release) don't count,
+    // and older saves that did count them still show the right number.
+    const goodTaps = Math.max(0, (st.taps || 0) - (st.blocked || 0));
+    const acc = pct(goodTaps, st.taps);
     const body = $('#stats-body');
     body.textContent = '';
 
@@ -3028,7 +3335,7 @@
       big(fmtNum(st.completed), 'Puzzles completed', `${pct(st.completed, st.played)}% of ${fmtNum(st.played)} started`),
       big(fmtNum(st.perfect), 'Perfect clears', 'No blocked taps, no hints', 'accent'),
       big(fmtNum(st.arrows), 'Arrows escaped'),
-      big(st.taps ? acc + '%' : '—', 'Tap accuracy', `${fmtNum(st.success)} of ${fmtNum(st.taps)} taps`)));
+      big(st.taps ? acc + '%' : '—', 'Tap accuracy', `${fmtNum(goodTaps)} of ${fmtNum(st.taps)} taps`)));
 
     if (!st.played) body.append(h('p', { class: 'empty-note', text: 'Play a board and your numbers will start filling in here.' }));
 
@@ -3040,10 +3347,13 @@
       row('Completion rate', st.played ? pct(st.completed, st.played) + '%' : '—'),
       row('Perfect clears', fmtNum(st.perfect)),
       row('Boards lost (out of hearts)', fmtNum(st.failed || 0)),
+      row('Close calls (won on last heart)', fmtNum(st.closeCalls || 0)),
+      row('Undos used', fmtNum(st.undos || 0)),
+      row('Coins spent', fmtNum(Math.max(0, (Save.data.progress.coinsEarned || 0) - (Save.data.progress.coins || 0)))),
       row('Total play time', fmtDuration(st.playMs)))));
 
     const ring = (() => {
-      const r = 26, c = 2 * Math.PI * r, f = st.taps ? st.success / st.taps : 0;
+      const r = 26, c = 2 * Math.PI * r, f = st.taps ? goodTaps / st.taps : 0;
       const svg = s('svg', { viewBox: '0 0 64 64', role: 'img', 'aria-label': `Accuracy ${acc} percent` });
       const bg = s('circle', { cx: 32, cy: 32, r, fill: 'none', 'stroke-width': 7 }); bg.style.stroke = 'var(--surface-2)';
       const fg = s('circle', { cx: 32, cy: 32, r, fill: 'none', 'stroke-width': 7, 'stroke-linecap': 'round', 'stroke-dasharray': `${(c * f).toFixed(2)} ${c.toFixed(2)}`, transform: 'rotate(-90 32 32)' });
@@ -3052,12 +3362,12 @@
       tx.style.fill = 'var(--text)';
       tx.textContent = st.taps ? acc + '%' : '—';
       svg.append(bg, fg, tx);
-      return h('div', { class: 'accuracy-ring' }, svg, h('span', { class: 'k', style: 'color:var(--muted)', text: 'Successful releases out of every arrow you tapped. Hints never count as blocked taps.' }));
+      return h('div', { class: 'accuracy-ring' }, svg, h('span', { class: 'k', style: 'color:var(--muted)', text: 'Taps that released an arrow, out of every tap. Arrows that fly out on their own after waiting count as escaped, not as taps.' }));
     })();
     body.append(section('Arrows', ring, h('div', { class: 'stat-rows' },
       row('Arrows escaped', fmtNum(st.arrows)),
       row('Total taps', fmtNum(st.taps)),
-      row('Successful taps', fmtNum(st.success)),
+      row('Successful taps', fmtNum(goodTaps)),
       row('Blocked taps', fmtNum(st.blocked)),
       row('Tap accuracy', st.taps ? acc + '%' : '—'),
       row('Hints used', fmtNum(st.hints)))));
@@ -3102,6 +3412,12 @@
       ...E.DIFFICULTY_ORDER.map((d) => row(`${diffLabel(d)} shapes`, fmtNum(b3(d)))),
       row('3D perfect clears', fmtNum(z.perfect3d || 0)),
       row('3D arrows escaped', fmtNum(z.arrows3d || 0)))));
+    const T = Save.data.timed;
+    body.append(section('Time Attack', h('div', { class: 'stat-rows' },
+      row('Runs played', fmtNum(T.runs || 0)),
+      row('Boards cleared', fmtNum(T.boards || 0)),
+      row('Arrows escaped', fmtNum(T.arrows || 0)),
+      ...TIMED_DIFFS.map((d) => { const b = timedBest(d); return row(`Best ${diffLabel(d)} run`, b ? `${b.boards} board${b.boards === 1 ? '' : 's'} · ${fmtNum(b.arrows)} arrows` : '—'); }))));
 
     body.append(section('Records', h('div', { class: 'stat-rows' },
       ...E.DIFFICULTY_ORDER.map((d) => row(`Fastest ${diffLabel(d)} clear`, fmtTime(st.fastest[d]))),
@@ -3167,7 +3483,7 @@
   $('#reset-open').addEventListener('click', () => {
     confirmDialog({
       title: 'Reset all progress?',
-      body: '<p>This will permanently erase:</p><ul><li>Campaign progress</li><li>Your level, coins and Style shop items</li><li>Statistics</li><li>Daily history and streaks</li><li>Zen records</li><li>Any board in progress</li></ul><p class="hold-note">Press and hold Reset to confirm. Your settings stay as they are.</p>',
+      body: '<p>This will permanently erase:</p><ul><li>Campaign progress</li><li>Your level, coins and Shop items</li><li>Statistics</li><li>Daily history and streaks</li><li>Zen records</li><li>Any board in progress</li></ul><p class="hold-note">Press and hold Reset to confirm. Your settings stay as they are.</p>',
       ok: 'Reset',
       danger: true,
       hold: 1200,
@@ -3264,7 +3580,7 @@
       if (res.stars === 1) res.notes.push('Clear it without hints for 2 stars');
       else if (res.stars === 2) res.notes.push('Clear it without a blocked tap for 3 stars');
     }
-    if (usesHearts(sess.mode) && res.counted && sess.hearts < MAX_HEARTS) res.notes.push(`${sess.hearts} of ${MAX_HEARTS} hearts left`);
+    if (usesHearts(sess.mode) && res.counted && sess.hearts < MAX_HEARTS && !res.closeCall) res.notes.push(`${sess.hearts} of ${MAX_HEARTS} hearts left`);
     $('#complete-note').textContent = res.notes.join(' · ');
     showReward(res.reward, res.milestones);
     const stats = $('#complete-stats');
@@ -3377,6 +3693,18 @@
       ? btn('All levels', 'ghost-btn', () => showScreen('campaign'))
       : btn('Home', 'ghost-btn', () => showScreen('home')));
     acts.append(btn('Try again', 'primary-btn', () => { ov.hidden = true; Game.open(sess.mode, sess.key, sess.diff, { fresh: true }); }));
+    // Undo the tap that cost the last heart and keep going.
+    if (Game.canUndo()) {
+      const coins = Save.data.progress.coins, short = coins < UNDO_COST;
+      const ub = h('button', { class: 'ghost-btn undo-btn', type: 'button', html: `Undo last tap · ${COIN_SVG}${UNDO_COST}` });
+      ub.disabled = short;
+      ub.setAttribute('aria-label', short ? `Undo needs ${UNDO_COST} coins. You have ${coins}.` : `Undo your last tap for ${UNDO_COST} coins and keep playing`);
+      ub.addEventListener('click', () => Game.undo());
+      acts.prepend(ub);
+      $('#complete-note').textContent = short
+        ? `Three blocked taps ends the run. Undo needs ${UNDO_COST} coins (you have ${fmtNum(coins)}).`
+        : `Three blocked taps ends the run. Undo your last tap for ${UNDO_COST} coins to keep going, or try again from the start.`;
+    }
     ov.hidden = false;
     acts.querySelector('.primary-btn').focus();
     Sound.play('fail');
@@ -3624,7 +3952,7 @@
         ['hint', 'Stuck? Tap Hint and a safe arrow lights up.'],
         ['path', 'Not sure where an arrow goes? Press and hold it to see its path. Letting go won’t move it.'],
         ['star', 'Earn up to 3 stars: clear the board, clear it without hints, then clear it without a single blocked tap.'],
-        ['coin', 'Every clear earns XP and coins. More stars and harder boards earn more. Spend coins on new arrow colors, boards and trails in the Style shop.'],
+        ['coin', 'Every clear earns XP and coins. More stars and harder boards earn more. Spend coins on new arrow colors, boards and trails in the Shop.'],
         ['cube', 'Want a twist? Switch Zen to 3D, or play the 3D bonus levels in Campaign. Drag to spin the shape; arrows bend over its edges and fly off the way they point.'],
         ['pinch', 'On big boards, zoom in and out by pinching with two fingers on a phone or tablet, or with the mouse wheel or trackpad on a computer. Drag to move around.'],
         ['save', 'Your progress lives in this app. Removing the app deletes it, so make a backup in Settings first.'],
@@ -3939,6 +4267,7 @@
   });
   $('#game-back').addEventListener('click', () => Game.leave());
   $('#btn-hint').addEventListener('click', () => Game.hint());
+  $('#btn-undo').addEventListener('click', () => Game.undo());
   $('#btn-restart').addEventListener('click', () => Game.restart());
   function zoomCenter(f) {
     const r = Game.view.svg.getBoundingClientRect();
@@ -3960,6 +4289,7 @@
     if (!$('#complete-overlay').hidden) return;
     const k = e.key.toLowerCase();
     if (k === 'h') Game.hint();
+    else if (k === 'u') Game.undo();
     else if (k === '+' || k === '=') zoomCenter(1.35);
     else if (k === '-' || k === '_') zoomCenter(1 / 1.35);
     else if (k === '0') Game.view.fit();
@@ -3976,6 +4306,14 @@
     if (!$('#complete-overlay').hidden || !$('#confirm-overlay').hidden || !$('#quick-overlay').hidden) return;
     sess.elapsed += dt;
     if (counted(sess)) Save.data.stats.playMs += dt;
+    if (sess.mode === 'timed') {
+      const run = Game.run;
+      if (!run || run.over) return;
+      run.left -= dt;
+      Game.showTimeLeft();
+      if (run.left <= 0) Game.endRun();
+      return;
+    }
     $('#hud-time').textContent = fmtTime(sess.elapsed);
     sinceSave += dt;
     if (sinceSave > 4000) { sinceSave = 0; Save.soon(); }

@@ -1,4 +1,6 @@
-# Slipstream
+# Arrow Escape
+
+(Formerly "Slipstream". Saves, backups and the service-worker cache keep the old internal name so existing progress carries over.)
 
 An arrow-escape puzzle game. Open `index.html` in any modern browser to play.
 No build step, no server, no accounts. Works offline (fonts fall back to system fonts).
@@ -38,6 +40,20 @@ and it appears in Zen automatically.
 - An eighth difficulty above Impossible, for Zen 2D and 3D. 2D boards are always a full 35–38 × 47–51
   rectangle of short arrows: 250–290 arrows. 3D: up to 10×10×10 shapes, about 130 arrows.
 - The campaign still ends at Impossible. Clearing one earns the "Inconceivable!" achievement.
+
+## Pictures
+- 32 hidden-picture boards (`pictures.js`): each is a simple silhouette (heart, fish, cat, anchor,
+  guitar, lighthouse…) built from basic pieces and filled with arrows by the normal generator.
+- Clear one to reveal its name and add it to the gallery. Three are always open; each find unlocks
+  the next. Later pictures are bigger (about 30 → 110 arrows). No hearts; stars as usual.
+
+## Time Attack
+
+Three minutes to clear as many 2D boards as you can, on Easy, Medium, Hard or Expert. Boards come from the Zen generator with fresh seeds, and the next one is built in the background so there's no wait. A blocked tap costs 5 seconds; there are no hints or hearts. Your best run per difficulty (boards, then arrows) is kept in `timed.best`. Pays coins per board (1 / 2 / 4 / 6) plus 1 per 10 arrows.
+
+## Undo and close calls
+
+In Campaign, 3D bonus and Daily, Undo takes back your last blocked tap for 10 coins: the heart comes back and the arrow stops waiting. It's also offered on the Out of hearts screen. It doesn't erase the tap from the board's record, so stars and Perfect don't change. Your coins show next to the difficulty while you play. A clear on your last heart counts as a close call (`stats.closeCalls`).
 
 ## Developer tools
 Settings → tap the version line five times → turn on Developer tools (or open with `#debug`).

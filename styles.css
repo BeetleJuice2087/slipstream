@@ -249,6 +249,7 @@ kbd {
 .mode-daily .mode-icon { stroke: var(--a1); } .mode-daily .fill { fill: var(--a1); }
 .mode-zen .mode-icon { stroke: var(--a3); } .mode-zen .fill { fill: var(--a3); }
 .mode-pictures .mode-icon { stroke: var(--a7); } .mode-pictures .fill { fill: var(--a7); stroke: none; }
+.mode-timed .mode-icon { stroke: var(--a0); } .mode-timed .fill { fill: var(--a0); stroke: none; }
 .mode-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .mode-name { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; }
 .mode-sub { color: var(--muted); font-size: 0.92rem; }
@@ -467,7 +468,20 @@ kbd {
   .game-top .diff-chip { font-size: 0.66rem; letter-spacing: 0.04em; padding: 3px 7px; }
   .game-top .diff-chip::before { display: none; }
   .game-name { font-size: 1rem; }
+  .game-top .game-coins { padding: 3px 8px; font-size: 0.8rem; }
+  .game-dock { gap: 6px; padding-left: 8px; padding-right: 8px; }
+  .dock-btn { padding: 0 13px; gap: 5px; font-size: 0.92rem; }
+  .dock-btn svg { flex: none; }
+  .game-dock.has-undo #btn-restart { padding: 0 15px; }
+  .game-dock.has-undo #btn-restart span { display: none; }
+  .dock-hint { padding: 0 18px; }
+  .dock-undo .undo-cost { font-size: 0.72rem; }
 }
+.game-top .game-coins { flex: none; }
+.dock-undo .undo-cost { display: inline-flex; align-items: center; gap: 2px; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.dock-undo .undo-cost .coin { width: 14px; height: 14px; }
+.dock-undo.is-ready { border-color: var(--a7); }
+.undo-btn .coin { width: 16px; height: 16px; vertical-align: -3px; margin: 0 2px 0 4px; }
 
 /* Hearts (Campaign and Daily) */
 .hearts { display: inline-flex; gap: 3px; flex: none; height: 1.38rem; align-items: center; }
@@ -735,6 +749,17 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
 .hud-item { display: flex; flex-direction: column; align-items: center; }
 .hud-num { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; font-variant-numeric: tabular-nums; line-height: 1.2; }
 .hud-label { font-size: 0.7rem; color: var(--muted); font-weight: 600; }
+/* Time Attack: the clock counts down; it turns red in the last 15 seconds. */
+#hud-time-item { position: relative; }
+.is-timed #hud-time { color: var(--text); }
+.is-timed.is-hurry #hud-time { color: var(--bad, #e0262a); animation: hurry 1s ease-in-out infinite; }
+@keyframes hurry { 50% { transform: scale(1.12); } }
+.time-penalty { position: absolute; top: -6px; right: -4px; font-weight: 800; font-size: 0.8rem; color: var(--bad, #e0262a); opacity: 0; pointer-events: none; }
+.time-penalty.is-on { animation: penalty 0.9s ease-out; }
+@keyframes penalty { 0% { opacity: 0; transform: translateY(4px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
+.timed-flash { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); font-family: var(--font-display); font-weight: 800; font-size: 1.6rem; color: var(--accent); background: var(--surface); border: 1px solid var(--line); padding: 8px 18px; border-radius: 999px; pointer-events: none; animation: tflash 0.7s ease-out forwards; z-index: 5; }
+@keyframes tflash { 0% { opacity: 0; transform: translate(-50%, -30%) scale(0.8); } 20% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); } 100% { opacity: 0; transform: translate(-50%, -80%) scale(1); } }
+.timed-best { font-size: 0.8rem; color: var(--muted); }
 .hud-progress {
   position: absolute; left: 12px; right: 12px; bottom: 6px;
   height: 3px; border-radius: 3px; background: var(--surface-2); overflow: hidden;
@@ -913,6 +938,8 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
 .sheet-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 .sheet-actions > * { flex: 1 1 140px; }
 .sheet-actions > .retry-btn { flex-basis: 100%; border-color: var(--gold); color: var(--gold); }
+.sheet-actions > .undo-btn { flex-basis: 100%; border-color: var(--gold); display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.sheet-actions > .undo-btn .coin { margin: 0; }
 .confirm-sheet ul { margin: 8px 0 0; padding-left: 20px; color: var(--muted); }
 .confirm-sheet p { margin: 0; color: var(--muted); }
 .hold-note { margin-top: 12px !important; font-size: 0.85rem; }
@@ -1001,6 +1028,12 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
   --l0: #ba0031; --l1: #ff4d00; --l2: #9e7b00; --l3: #00a400; --l4: #007e9a; --l5: #3f5eff; --l6: #b32bff; --l7: #ff00b6; }
 .skin.th-jewel { --d0: #0086fc; --d1: #4ac2e7; --d2: #5ada63; --d3: #ffd300; --d4: #ff8905; --d5: #ff3259; --d6: #b478ff; --d7: #f919cc;
   --l0: #001b84; --l1: #3382ab; --l2: #037100; --l3: #ab8800; --l4: #ff3937; --l5: #901913; --l6: #6928d2; --l7: #c6009d; }
+.skin.th-autumn { --d0: #fde0df; --d1: #dc4400; --d2: #f4d214; --d3: #e50180; --d4: #7eb30e; --d5: #d68c00; --d6: #bd78a0; --d7: #ffa397;
+  --l0: #bc686e; --l1: #522400; --l2: #9b8501; --l3: #b50164; --l4: #3d5d01; --l5: #8f4200; --l6: #6a0057; --l7: #ff0800; }
+.skin.th-berry { --d0: #ffdee8; --d1: #af6ba5; --d2: #a6b0ff; --d3: #fd004e; --d4: #4572fe; --d5: #ff927d; --d6: #b517fe; --d7: #ff6efe;
+  --l0: #ff0289; --l1: #53005f; --l2: #8a79ff; --l3: #99032c; --l4: #1600b1; --l5: #b66b5c; --l6: #635594; --l7: #b300c6; }
+.skin.th-aurora { --d0: #2dfe34; --d1: #00a075; --d2: #1ffffb; --d3: #14b8ff; --d4: #6667ff; --d5: #d58ffd; --d6: #bdc56c; --d7: #ffdafd;
+  --l0: #22af35; --l1: #077152; --l2: #0299b6; --l3: #004473; --l4: #1f59f7; --l5: #8621cb; --l6: #153d00; --l7: #ba5f9b; }
 .skin { --a0: var(--d0); --a1: var(--d1); --a2: var(--d2); --a3: var(--d3); --a4: var(--d4); --a5: var(--d5); --a6: var(--d6); --a7: var(--d7); }
 .skin.tone-light { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .skin.tone-auto { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); } }
@@ -1009,7 +1042,12 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
 .skin.bg-deepsea { --board: #062331; --dot: #3b7d96; --line: #12384a; }
 .skin.bg-pine { --board: #0d2219; --dot: #457d61; --line: #1b3a2d; }
 .skin.bg-paper { --board: #fbf5e6; --dot: #bfa874; --line: #e6dabd; }
-.skin.bg-blush { --board: #fff0f3; --dot: #d996a8; --line: #f3d0d8; }
+.skin.bg-blush { --board: #f2d0c9; --dot: #c4948a; --line: #e5bcb3; }
+.skin.bg-sand { --board: #f4ecdc; --dot: #c2a77a; --line: #e4d6bb; }
+.skin.bg-lavender { --board: #9678b6; --dot: #6a4f8c; --line: #876aa8; --stuck: #d0001a; }
+.skin.bg-mint { --board: #94ffd4; --dot: #3fae84; --line: #7aeabd; }
+.skin.bg-plum { --board: #8e4585; --dot: #5c2756; --line: #7f3a77; --stuck: #ff2d2d; }
+.skin.bg-charcoal { --board: #1a1a1c; --dot: #6b6b73; --line: #2e2e33; }
 
 /* ---------------- Level, XP and coins ---------------- */
 .coin { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1039,6 +1077,9 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
 .player-mid { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1; }
 .player-row { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; font-weight: 600; color: var(--muted); }
 .player-row > span:first-child { color: var(--text); font-variant-numeric: tabular-nums; }
+.player-row > span { white-space: nowrap; }
+.player-next { color: var(--gold); font-variant-numeric: tabular-nums; display: inline-flex; align-items: center; gap: 3px; }
+.player-next .coin { width: 14px; height: 14px; }
 .player-card {
   display: flex; align-items: center; gap: 14px;
   padding: 12px 14px; text-align: left;
