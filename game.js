@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SLIPSTREAM — game
+   ARROW ESCAPE (formerly Slipstream) — game
    Systems, in order: helpers · Save · Settings · Audio · Dates/Daily ·
    Stats recording · Renderer (BoardView) · Input · Game session ·
    Screens (Home, Campaign, Daily, Zen, Stats, Settings) · Overlays ·
@@ -58,7 +58,7 @@
      SAVE SYSTEM — one JSON document in localStorage.
      Missing keys are filled from defaults so older saves keep working.
      ====================================================================== */
-  const SAVE_KEY = 'slipstream.save.v1';
+  const SAVE_KEY = 'slipstream.save.v1'; // kept from the old name so everyone's progress carries over
   function defaultSave() {
     return {
       v: 1,
@@ -67,7 +67,8 @@
       daily: { history: {}, longestStreak: 0, unlocked: {} }, // unlocked: past days bought with coins
       startedOn: null, // first day this player opened the game
       pictures: { done: {} }, // picture index -> { completed, stars, perfect, bestTime, plays, clears }
-      zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [], dim: '2d' },
+      zen: { boards: {}, perfect: 0, arrows: 0, longestSession: 0, session: { diff: null, count: 0 }, recentSeeds: [], dim: '2d',
+        boards3d: {}, perfect3d: 0, arrows3d: 0 }, // the 3D share of the totals above (2D = total − 3D)
       stats: {
         played: 0, completed: 0, perfect: 0, playMs: 0,
         arrows: 0, taps: 0, success: 0, blocked: 0, hints: 0,
@@ -1984,7 +1985,7 @@
       else { mode = isCubeKey(sess.key) ? 'Sandbox 3D · not counted' : 'Sandbox · not counted'; name = 'Seed ' + (isCubeKey(sess.key) ? String(sess.key).slice(3) : sess.key); }
       $('#game-mode').textContent = mode;
       $('#game-name').textContent = name;
-      document.title = `${name} · Slipstream`;
+      document.title = `${name} · Arrow Escape`;
     },
 
     updateHud() {
@@ -2050,7 +2051,7 @@
         if (count) {
           st.success++;
           st.arrows++;
-          if (sess.mode === 'zen') Save.data.zen.arrows++;
+          if (sess.mode === 'zen') { Save.data.zen.arrows++; if (isCubeKey(sess.key)) Save.data.zen.arrows3d++; }
         }
         this.combo++;
         this.view.escape(id);
@@ -2457,6 +2458,7 @@
       const z = Save.data.zen;
       z.boards[d] = (z.boards[d] || 0) + 1;
       if (perfect) z.perfect++;
+      if (isCubeKey(sess.key)) { z.boards3d[d] = (z.boards3d[d] || 0) + 1; if (perfect) z.perfect3d++; }
       z.session.count = (z.session.count || 0) + 1;
       z.longestSession = Math.max(z.longestSession || 0, z.session.count);
       res.sessionCount = z.session.count;
@@ -2482,7 +2484,7 @@
     currentScreen = name;
     Save.data.route = name;
     if (name !== 'game') {
-      document.title = 'Slipstream';
+      document.title = 'Arrow Escape';
       $('#complete-overlay').hidden = true;
       clearTimeout(zenTimer);
     }
@@ -2940,13 +2942,14 @@
     const cube = z.dim === '3d';
     for (const b of $$('#zen-dim button')) { const on = b.dataset.dim === (cube ? '3d' : '2d'); b.classList.toggle('is-on', on); b.setAttribute('aria-checked', on ? 'true' : 'false'); }
     $('#zen-dim-note').hidden = !cube;
+    const zenCount = (id) => (cube ? (z.boards3d[id] || 0) : (z.boards[id] || 0) - (z.boards3d[id] || 0));
     for (const id of E.DIFFICULTY_ORDER) {
       const d = E.DIFFICULTIES[id];
       const n = SlipCube.CUBE[id] ? SlipCube.CUBE[id].N : 3;
-      box.append(h('button', { class: 'zen-choice', type: 'button', role: 'listitem', 'data-diff': id, 'aria-label': `Start Zen${cube ? ' 3D' : ''} on ${d.label}. ${z.boards[id] || 0} boards cleared.` },
+      box.append(h('button', { class: 'zen-choice', type: 'button', role: 'listitem', 'data-diff': id, 'aria-label': `Start Zen${cube ? ' 3D' : ''} on ${d.label}. ${zenCount(id)} boards cleared.` },
         h('span', { class: 'diff-chip diff-' + id, text: d.label }),
         h('p', { text: cube ? `Cubes up to ${n}×${n}×${n} and block shapes of a similar size.` : d.blurb }),
-        h('span', { class: 'zen-count' }, h('strong', { text: fmtNum(z.boards[id] || 0) }), h('span', { text: 'cleared' }))));
+        h('span', { class: 'zen-count' }, h('strong', { text: fmtNum(zenCount(id)) }), h('span', { text: 'cleared' }))));
     }
     const act = Save.data.active;
     const cont = $('#zen-continue');
@@ -2997,7 +3000,25 @@
 
     const big = (v, k, sub, cls) => h('div', { class: 'big-stat' + (cls ? ' ' + cls : '') }, h('span', { class: 'v', text: v }), h('span', { class: 'k', text: k }), sub ? h('span', { class: 'sub', text: sub }) : null);
     const row = (k, v) => h('div', { class: 'stat-row' }, h('span', { class: 'k', text: k }), h('span', { class: 'v', text: v }));
-    const section = (title, ...kids) => h('section', { class: 'stats-section' }, h('h3', { text: title }), ...kids);
+    // Each section folds open/closed from its title; which ones are closed is remembered.
+    const closed = Save.data.statsCollapsed || (Save.data.statsCollapsed = {});
+    const section = (title, ...kids) => {
+      const isClosed = !!closed[title];
+      const content = h('div', { class: 'stats-body', hidden: isClosed }, ...kids);
+      const btn = h('button', { class: 'stats-toggle', type: 'button', 'aria-expanded': isClosed ? 'false' : 'true' },
+        h('span', { class: 'stats-title', text: title }), h('span', { class: 'stats-line', 'aria-hidden': 'true' }),
+        h('span', { class: 'stats-chev', 'aria-hidden': 'true', html: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>' }));
+      const sec = h('section', { class: 'stats-section' + (isClosed ? ' is-collapsed' : '') }, h('h3', null, btn), content);
+      btn.addEventListener('click', () => {
+        const nowClosed = !sec.classList.contains('is-collapsed');
+        sec.classList.toggle('is-collapsed', nowClosed);
+        content.hidden = nowClosed;
+        btn.setAttribute('aria-expanded', nowClosed ? 'false' : 'true');
+        if (nowClosed) closed[title] = true; else delete closed[title];
+        Save.soon();
+      });
+      return sec;
+    };
     const meter = (label, n, max, color) => h('div', { class: 'meter' },
       h('span', { text: label }),
       h('span', { class: 'bar', role: 'img', 'aria-label': `${label}: ${n} of ${max}` }, h('span', { style: `width:${pct(n, max)}%;--c:${color}` })),
@@ -3065,13 +3086,22 @@
       row('Longest streak', `${sk.longest} day${sk.longest === 1 ? '' : 's'}`),
       row('Perfect daily clears', fmtNum(tot.perfect)))));
 
-    const zt = E.DIFFICULTY_ORDER.reduce((a, d) => a + (z.boards[d] || 0), 0);
-    body.append(section('Zen', h('div', { class: 'stat-rows' },
-      row('Zen boards completed', fmtNum(zt)),
-      ...E.DIFFICULTY_ORDER.map((d) => row(`${diffLabel(d)} Zen boards`, fmtNum(z.boards[d] || 0))),
-      row('Zen perfect clears', fmtNum(z.perfect)),
+    // 3D clears are counted on their own; 2D is the total minus the 3D share.
+    const b3 = (d) => (z.boards3d && z.boards3d[d]) || 0;
+    const b2 = (d) => Math.max(0, (z.boards[d] || 0) - b3(d));
+    const zt2 = E.DIFFICULTY_ORDER.reduce((a, d) => a + b2(d), 0);
+    const zt3 = E.DIFFICULTY_ORDER.reduce((a, d) => a + b3(d), 0);
+    body.append(section('Zen 2D Boards', h('div', { class: 'stat-rows' },
+      row('2D boards completed', fmtNum(zt2)),
+      ...E.DIFFICULTY_ORDER.map((d) => row(`${diffLabel(d)} boards`, fmtNum(b2(d)))),
+      row('2D perfect clears', fmtNum(Math.max(0, z.perfect - (z.perfect3d || 0)))),
       row('Longest Zen session', `${z.longestSession || 0} board${z.longestSession === 1 ? '' : 's'}`),
-      row('Zen arrows escaped', fmtNum(z.arrows)))));
+      row('2D arrows escaped', fmtNum(Math.max(0, z.arrows - (z.arrows3d || 0)))))));
+    body.append(section('Zen 3D Shapes', h('div', { class: 'stat-rows' },
+      row('3D shapes completed', fmtNum(zt3)),
+      ...E.DIFFICULTY_ORDER.map((d) => row(`${diffLabel(d)} shapes`, fmtNum(b3(d)))),
+      row('3D perfect clears', fmtNum(z.perfect3d || 0)),
+      row('3D arrows escaped', fmtNum(z.arrows3d || 0)))));
 
     body.append(section('Records', h('div', { class: 'stat-rows' },
       ...E.DIFFICULTY_ORDER.map((d) => row(`Fastest ${diffLabel(d)} clear`, fmtTime(st.fastest[d]))),
@@ -3682,7 +3712,7 @@
     async decode(code) {
       code = String(code || '').replace(/\s+/g, '');
       const m = /^SLIP([01])\.([A-Za-z0-9_-]+)$/.exec(code);
-      if (!m) throw new Error('That doesn’t look like a Slipstream backup code. Make sure you copied all of it.');
+      if (!m) throw new Error('That doesn’t look like an Arrow Escape backup code. Make sure you copied all of it.');
       let bytes = this.fromB64(m[2]);
       if (m[1] === '1') {
         if (!window.DecompressionStream) throw new Error('This browser is too old to read this backup. Try updating it.');
@@ -3692,7 +3722,7 @@
       if (!obj || obj.app !== 'slipstream' || !obj.data || !obj.data.campaign || !obj.data.stats) throw new Error('This backup is damaged or from a different app.');
       return obj;
     },
-    fileName() { return `slipstream-backup-${dateKey()}.txt`; },
+    fileName() { return `arrow-escape-backup-${dateKey()}.txt`; },
   };
   function renderBackupStatus() {
     const lb = Save.data.lastBackup;
@@ -3725,7 +3755,7 @@
     try {
       // Phones: the share sheet offers "Save to Files", AirDrop, Messages and so on.
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Slipstream backup' });
+        await navigator.share({ files: [file], title: 'Arrow Escape backup' });
         return;
       }
     } catch (e) {
