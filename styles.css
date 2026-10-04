@@ -399,10 +399,9 @@ kbd {
 .diff-insane::before { opacity: 1; }
 .diff-impossible { color: var(--bg); background: var(--text); border-color: var(--text); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--a7); }
 .diff-impossible::before { opacity: 1; }
-/* Zen-only top tier: a glowing gradient chip */
+/* Top tier (Zen and the last campaign chapter): a glowing gradient chip */
 .diff-inconceivable { color: #fff; background: linear-gradient(100deg, var(--a7), var(--a6) 45%, var(--a4)); border-color: transparent; box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--a6), 0 0 14px -2px var(--a6); }
 .diff-inconceivable::before { opacity: 1; }
-.tier-inconceivable { --tier-color: var(--a6); }
 
 /* ---------------- Campaign ---------------- */
 .tier { margin-top: 10px; }
@@ -461,6 +460,7 @@ kbd {
 .tier-nightmare { --tier-color: var(--a7); }
 .tier-insane { --tier-color: var(--a0); }
 .tier-impossible { --tier-color: var(--text); }
+.tier-inconceivable { --tier-color: var(--a6); }
 
 /* Narrow phones: keep title, hearts and difficulty on one line. */
 @media (max-width: 440px) {

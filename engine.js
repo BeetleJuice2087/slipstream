@@ -1297,8 +1297,9 @@
     { diff: 'nightmare', from: 116, to: 130 },
     { diff: 'insane', from: 131, to: 140 },
     { diff: 'impossible', from: 141, to: 150 },
+    { diff: 'inconceivable', from: 151, to: 160 },
   ];
-  const CAMPAIGN_LENGTH = 150;
+  const CAMPAIGN_LENGTH = 160;
   const GENERATOR_VERSION = 'v5'; // v2: fully covered boards · v3: mixed lengths, winding arrows · v4: random board outlines · v5: Perlin outlines
   // Seeds still use 'v3', so plain rectangular boards are exactly what they were.
   const SEED_VERSION = 'v3';

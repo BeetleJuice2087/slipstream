@@ -36,10 +36,12 @@ and it appears in Zen automatically.
   campaign levels 1–70 and Daily boards are not changed.
 - Free at the start, roughly: Hard 18%, Expert 14%, Nightmare 12%, Insane 10%, Impossible 11%.
 
-## Inconceivable (Zen only)
+## Inconceivable
 - An eighth difficulty above Impossible, for Zen 2D and 3D. 2D boards are always a full 35–38 × 47–51
   rectangle of short arrows: 250–290 arrows. 3D: up to 10×10×10 shapes, about 130 arrows.
-- The campaign still ends at Impossible. Clearing one earns the "Inconceivable!" achievement.
+- Campaign levels 151–160 are Inconceivable (the final chapter), followed by 3D bonus 16, a frozen
+  Inconceivable block shape (~124 arrows). Clearing an Inconceivable board in Zen earns the "Inconceivable!" achievement.
+- Saves that had already cleared level 150 get level 151 opened on load (`catchUpCampaign`).
 
 ## Pictures
 - 32 hidden-picture boards (`pictures.js`): each is a simple silhouette (heart, fish, cat, anchor,
@@ -61,9 +63,9 @@ A Dev button appears in game: seed, board data, validate, show solution order, a
 and a sandbox "Generate new seed" that never touches your stats.
 
 ## Difficulties and hearts
-Seven tiers: Easy, Medium, Hard, Expert, Nightmare, Insane, Impossible. The campaign runs 150 levels
+Eight tiers: Easy, Medium, Hard, Expert, Nightmare, Insane, Impossible, Inconceivable. The campaign runs 160 levels
 (1-30 Easy, 31-70 Medium, 71-100 Hard, 101-115 Expert, 116-130 Nightmare, 131-140 Insane,
-141-150 Impossible); Zen offers all seven.
+141-150 Impossible, 151-160 Inconceivable); Zen offers all eight.
 Campaign and Daily give 3 hearts per attempt; each blocked tap costs one and the third ends the run.
 Zen has no heart limit.
 
