@@ -201,6 +201,25 @@ kbd {
 }
 .logo span { color: var(--accent); }
 .tagline { margin: 10px 0 0; color: var(--muted); max-width: 34ch; text-wrap: balance; }
+/* "All-In-One": a second, smaller title line. Beside the tagline on wide
+   screens, on its own line under the title on phones. Icons (board,
+   shape, cube) sit to its right. */
+.hero-sub { display: flex; align-items: center; justify-content: space-between; gap: 6px 20px; }
+.hero-sub .tagline { flex: 1 1 auto; }
+.edition {
+  flex: none; display: inline-flex; align-items: center; gap: 0.35em;
+  margin-top: 8px;
+  font-family: var(--font-display); font-weight: 800;
+  font-size: clamp(1.45rem, 6vw, 2.1rem); letter-spacing: -0.02em; line-height: 1;
+  color: var(--text);
+}
+.ed-icons { width: 2.1em; height: 0.7em; fill: none; stroke: var(--accent); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+@media (max-width: 520px) {
+  .hero-sub { flex-direction: column; align-items: flex-start; }
+  .edition { order: -1; margin-top: 4px; }
+  .hero-sub .tagline { margin-top: 2px; }
+}
+
 
 .continue-card {
   display: grid;
