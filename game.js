@@ -354,11 +354,24 @@
   const PIC = window.SlipPictures;
   const picDone = () => { const d = Save.data.pictures.done; let n = 0; for (const k in d) if (d[k].completed) n++; return n; };
   const picUnlocked = (k) => k < picDone() + 3 || !!(Save.data.pictures.done[k] && Save.data.pictures.done[k].completed);
-  /** The picture's outline as one SVG path of squares (for gallery tiles and the reveal). */
+  /** The picture's outline as one SVG path (for gallery tiles and the reveal).
+      Uses the same size of mask as the puzzle board, so the picture shows
+      exactly the shape you cleared, at the same detail. */
+  const picSvgCache = new Map();
   function picSvg(k, cls) {
-    const L = PIC.pictureLevel(k), m = PIC.pictureMask(PIC.PICTURES[k], 1);
+    const L = PIC.pictureLevel(k);
+    let m = picSvgCache.get(k);
+    if (!m) { m = PIC.pictureMask(PIC.PICTURES[k], L.scale); picSvgCache.set(k, m); }
     let d = '';
-    for (let y = 0; y < m.rows; y++) for (let x = 0; x < m.cols; x++) if (m.mask[y * m.cols + x]) d += `M${x} ${y}h1.04v1.04h-1.04z`;
+    for (let y = 0; y < m.rows; y++) {
+      for (let x = 0; x < m.cols; x++) {
+        if (!m.mask[y * m.cols + x]) continue;
+        let w = 1;
+        while (x + w < m.cols && m.mask[y * m.cols + x + w]) w++;
+        d += `M${x} ${y}h${w + 0.04}v1.04h-${w + 0.04}z`;
+        x += w - 1;
+      }
+    }
     return `<svg class="${cls || ''}" viewBox="-0.5 -0.5 ${m.cols + 1} ${m.rows + 1}" aria-hidden="true" data-pic="${L.id}"><path d="${d}"/></svg>`;
   }
   const genFor = (key, mode) => (mode === 'picture' ? E.GENERATOR_VERSION + '+' + E.ZEN_TIGHT_VERSION + '+' + PIC.PICTURE_VERSION : isCubeKey(key) ? E.GENERATOR_VERSION + '+' + SlipCube.CUBE_VERSION
