@@ -1053,6 +1053,8 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
   --l0: #ff0289; --l1: #53005f; --l2: #8a79ff; --l3: #99032c; --l4: #1600b1; --l5: #b66b5c; --l6: #635594; --l7: #b300c6; }
 .skin.th-aurora { --d0: #49f09e; --d1: #03caaf; --d2: #58b4f5; --d3: #a594ff; --d4: #cf5cf5; --d5: #c8ffe9; --d6: #7fe6ff; --d7: #ff7ad9;
   --l0: #059a5e; --l1: #06775d; --l2: #076892; --l3: #514aab; --l4: #64257c; --l5: #1e3a7a; --l6: #018eb4; --l7: #b0258f; }
+.skin.th-halloween { --d0: #f78302; --d1: #cc90ff; --d2: #f3edd6; --d3: #7be04a; --d4: #ffc93c; --d5: #fe3854; --d6: #ed43ca; --d7: #b6bfd3;
+  --l0: #e34300; --l1: #5224a4; --l2: #1a1a1a; --l3: #218d2b; --l4: #8f6200; --l5: #a40014; --l6: #9e1c89; --l7: #505b73; }
 .skin { --a0: var(--d0); --a1: var(--d1); --a2: var(--d2); --a3: var(--d3); --a4: var(--d4); --a5: var(--d5); --a6: var(--d6); --a7: var(--d7); }
 .skin.tone-light { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .skin.tone-auto { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); } }
@@ -1067,6 +1069,9 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
 .skin.bg-mint { --board: #94ffd4; --dot: #3fae84; --line: #7aeabd; }
 .skin.bg-plum { --board: #8e4585; --dot: #5c2756; --line: #7f3a77; --stuck: #ff2d2d; }
 .skin.bg-charcoal { --board: #1a1a1c; --dot: #6b6b73; --line: #2e2e33; }
+.skin.bg-pumpkin { --board: #d9650f; --dot: #8f3c00; --line: #c25808; --stuck: #ffffff; }
+.skin.bg-witch { --board: #3d1a5c; --dot: #8a5cb8; --line: #522675; }
+.skin.bg-haunted { --board: #0b0a0e; --dot: #4a4458; --line: #1e1b26; }
 
 /* ---------------- Level, XP and coins ---------------- */
 .coin { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1138,6 +1143,12 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
 .style-meta { display: flex; flex-direction: column; gap: 1px; min-height: 2.4em; }
 .style-meta strong { font-size: 0.98rem; }
 .style-meta span { font-size: 0.8rem; color: var(--muted); }
+.style-kind { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+/* Holiday section: a tinted panel so it stands out at the top of the Shop. */
+.style-holiday { padding: 4px 14px 16px; margin-top: 8px; border-radius: var(--r-lg); border: 1.5px solid var(--hol, var(--accent)); background: color-mix(in oklab, var(--hol, var(--accent)) 9%, transparent); }
+.style-holiday h3 { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; }
+.holiday-until { margin-left: auto; font-family: var(--font-body); font-size: 0.78rem; font-weight: 800; color: var(--hol, var(--accent)); }
+.holiday-halloween { --hol: #f07a12; }
 .style-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 40px; border-radius: 999px; font-weight: 700; cursor: pointer;

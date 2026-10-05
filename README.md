@@ -57,6 +57,10 @@ Three minutes to clear as many 2D boards as you can, on Easy, Medium, Hard or Ex
 
 In Campaign, 3D bonus and Daily, Undo takes back your last blocked tap for 10 coins: the heart comes back and the arrow stops waiting. It's also offered on the Out of hearts screen. It doesn't erase the tap from the board's record, so stars and Perfect don't change. Your coins show next to the difficulty while you play. A clear on your last heart counts as a close call (`stats.closeCalls`).
 
+## Holidays
+
+Seasonal Shop items (`season` on a `STYLE` entry, months in `SEASONS`) appear in their own section at the top of the Shop only during their month, by the player's local date. Anything bought stays owned all year and then shows in the normal Shop sections. Halloween (October): Halloween arrow colors, Pumpkin / Witch / Haunted boards, and Pumpkins / Bats / Ghosts / Candy trails (little pictures from `ICONS`, drawn on both flat and 3D boards).
+
 ## Developer tools
 Settings → tap the version line five times → turn on Developer tools (or open with `#debug`).
 A Dev button appears in game: seed, board data, validate, show solution order, auto-solve,

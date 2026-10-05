@@ -425,6 +425,7 @@
       { id: 'autumn', name: 'Autumn', price: 150 },
       { id: 'berry', name: 'Berry', price: 180 },
       { id: 'aurora', name: 'Aurora', price: 250 },
+      { id: 'halloween', name: 'Halloween', price: 200, season: 'halloween', desc: 'Orange, purple and black' },
     ],
     board: [
       { id: 'default', name: 'Default', price: 0, tone: 'auto' },
@@ -438,6 +439,9 @@
       { id: 'mint', name: 'Mint', price: 120, tone: 'light' },
       { id: 'plum', name: 'Plum', price: 150, tone: 'mid' },
       { id: 'charcoal', name: 'Charcoal', price: 180, tone: 'dark' },
+      { id: 'pumpkin', name: 'Pumpkin', price: 150, tone: 'mid', season: 'halloween', desc: 'Pumpkin orange' },
+      { id: 'witch', name: 'Witch', price: 150, tone: 'dark', season: 'halloween', desc: 'Deep witchy purple' },
+      { id: 'haunted', name: 'Haunted', price: 150, tone: 'dark', season: 'halloween', desc: 'Pitch black' },
     ],
     trail: [
       { id: 'classic', name: 'Classic', price: 0, desc: 'A soft streak' },
@@ -448,9 +452,17 @@
       { id: 'bubbles', name: 'Bubbles', price: 180, desc: 'Floating bubbles drift up' },
       { id: 'hearts', name: 'Hearts', price: 220, desc: 'Leaves little hearts' },
       { id: 'gold', name: 'Gold', price: 400, desc: 'A golden tail and gold dust' },
+      { id: 'pumpkins', name: 'Pumpkins', price: 200, season: 'halloween', desc: 'Leaves tumbling pumpkins' },
+      { id: 'bats', name: 'Bats', price: 200, season: 'halloween', desc: 'A flutter of bats' },
+      { id: 'ghosts', name: 'Ghosts', price: 200, season: 'halloween', desc: 'Little ghosts float up' },
+      { id: 'candy', name: 'Candy', price: 200, season: 'halloween', desc: 'A trail of sweets' },
     ],
   };
   const STYLE_KINDS = [['arrows', 'Arrow colors'], ['board', 'Board'], ['trail', 'Flight trail']];
+  /* HOLIDAYS — seasonal Shop items are only for sale during their month
+     (local date). Anything bought stays owned and usable all year. */
+  const SEASONS = { halloween: { name: 'Halloween', month: 9, until: 'Oct 31', emoji: '🎃' } };
+  const seasonNow = () => { const m = new Date().getMonth(); return Object.keys(SEASONS).find((k) => SEASONS[k].month === m) || null; };
   const styleItem = (kind, id) => STYLE[kind].find((it) => it.id === id) || STYLE[kind][0];
   /** Put the equipped (or given) arrow theme and board on an SVG board. */
   const OUTLINED_THEMES = ['pastel', 'sunset', 'ocean'];
@@ -509,7 +521,28 @@
     bubbles:  { len: 1.6, opacity: 0.28, specks: 'bubble', every: 55 },
     hearts:   { len: 1.6, opacity: 0.3, specks: 'heart', every: 60 },
     gold:     { len: 4.2, opacity: 0.85, width: 0.95, color: '#e8b030', specks: 'gold', every: 30 },
+    pumpkins: { len: 2.2, opacity: 0.55, color: '#ff7b1c', specks: 'icon', icon: 'pumpkin', every: 75 },
+    bats:     { len: 2.2, opacity: 0.5, color: '#8a55d6', specks: 'icon', icon: 'bat', every: 65 },
+    ghosts:   { len: 2.2, opacity: 0.45, color: '#c9c7e8', specks: 'icon', icon: 'ghost', every: 85 },
+    candy:    { len: 2.2, opacity: 0.55, color: '#ff5fa2', specks: 'icon', icon: 'candy', every: 60 },
   };
+  /* Little trail pictures, drawn in a unit box around (0, 0). Used by the
+     flat board (SVG), the 3D view (canvas Path2D) and the Shop previews.
+     rise: how far it drifts up; spin: turns as it fades. */
+  const CANDY_COLORS = ['#ff5fa2', '#3fd0c9', '#ffd23f', '#9b6bff'];
+  const ICONS = {
+    pumpkin: { d: 'M0 -0.26C0.3 -0.34 0.48 -0.14 0.48 0.07C0.48 0.31 0.26 0.4 0 0.37C-0.26 0.4 -0.48 0.31 -0.48 0.07C-0.48 -0.14 -0.3 -0.34 0 -0.26ZM-0.06 -0.26L-0.03 -0.46L0.09 -0.43L0.05 -0.26Z',
+      fill: '#ff7b1c', stroke: '#8a3500', rise: 0.15, spin: 50 },
+    bat: { d: 'M0 -0.08C0.06 -0.2 0.13 -0.2 0.17 -0.1C0.27 -0.24 0.4 -0.24 0.5 -0.13C0.42 -0.06 0.4 0.03 0.42 0.13C0.34 0.06 0.26 0.08 0.21 0.15C0.15 0.07 0.07 0.07 0 0.17C-0.07 0.07 -0.15 0.07 -0.21 0.15C-0.26 0.08 -0.34 0.06 -0.42 0.13C-0.4 0.03 -0.42 -0.06 -0.5 -0.13C-0.4 -0.24 -0.27 -0.24 -0.17 -0.1C-0.13 -0.2 -0.06 -0.2 0 -0.08Z',
+      fill: '#2a1b3d', stroke: '#b78cf0', rise: 0.7, spin: 0, flap: true },
+    ghost: { d: 'M-0.3 0.4L-0.3 -0.08C-0.3 -0.5 0.3 -0.5 0.3 -0.08L0.3 0.4L0.18 0.3L0.06 0.4L-0.06 0.3L-0.18 0.4ZM-0.15 -0.13a0.055 0.075 0 1 0 0.11 0a0.055 0.075 0 1 0 -0.11 0ZM0.04 -0.13a0.055 0.075 0 1 0 0.11 0a0.055 0.075 0 1 0 -0.11 0Z',
+      fill: '#f7f5ff', stroke: '#6b6b84', rise: 0.6, spin: 0, evenodd: true },
+    candy: { d: 'M-0.17 0a0.17 0.17 0 1 0 0.34 0a0.17 0.17 0 1 0 -0.34 0ZM-0.15 -0.06L-0.42 -0.2L-0.42 0.2L-0.15 0.06ZM0.15 -0.06L0.42 -0.2L0.42 0.2L0.15 0.06Z',
+      fill: null, stroke: 'rgba(0,0,0,0.35)', rise: 0.2, spin: 120 },
+  };
+  const iconFill = (ic) => ic.fill || CANDY_COLORS[Math.floor(Math.random() * CANDY_COLORS.length)];
+  const iconPath2D = {};
+  const getPath2D = (name) => iconPath2D[name] || (iconPath2D[name] = new Path2D(ICONS[name].d));
   const HEART_PINK = '#ff5c8a', GOLD = '#e8b030', GOLD_LIGHT = '#fff1b8';
   const RAINBOW = [0, 1, 2, 3, 4, 6]; // palette slots: red, orange, yellow-green, teal, blue, purple
   const EXIT_GLIDE_CELLS = 2.6;   // how far past the edge an arrow travels before it's gone
@@ -739,7 +772,7 @@
         }
         if ((tr.sparkle || tr.specks) && now - lastSpark > (tr.every || 32) && off < fadeFrom) {
           lastSpark = now;
-          this.sparkle(this.pointAt(geo, off + Math.random() * 0.6), node.a.color, tr.specks);
+          this.sparkle(this.pointAt(geo, off + Math.random() * 0.6), node.a.color, tr.specks, tr.icon);
         }
         // Fully visible while any part is on the board; fade only past the edge.
         node.g.style.opacity = off <= fadeFrom ? '1' : String(Math.max(0, 1 - (off - fadeFrom) / EXIT_GLIDE_CELLS));
@@ -755,13 +788,31 @@
 
     /** A speck left behind by a trail: glitter (Sparkle), gold dust,
         a bubble that floats up, or a little heart that rises and fades. */
-    sparkle(pt, color, kind) {
+    sparkle(pt, color, kind, iconName) {
       const x = pt[0] + (Math.random() - 0.5) * 0.35, y = pt[1] + (Math.random() - 0.5) * 0.35;
       let c, life = 380 + Math.random() * 220, rise = 0, grow = 0;
       if (kind === 'bubble') {
         c = s('circle', { r: 0.08 + Math.random() * 0.07, cx: x, cy: y });
         c.style.fill = 'none'; c.style.stroke = `var(--a${color % 8})`; c.style.strokeWidth = '0.035';
         life = 650 + Math.random() * 300; rise = 0.55; grow = 0.6;
+      } else if (kind === 'icon') {
+        const ic = ICONS[iconName], k = 0.5 + Math.random() * 0.15, rot0 = (Math.random() - 0.5) * 30;
+        c = s('path', { d: ic.d, 'fill-rule': ic.evenodd ? 'evenodd' : 'nonzero' });
+        c.style.fill = iconFill(ic); c.style.stroke = ic.stroke; c.style.strokeWidth = '0.06'; c.style.strokeLinejoin = 'round';
+        life = 750 + Math.random() * 300; rise = ic.rise;
+        const dx = (Math.random() - 0.5) * 0.5;
+        c.setAttribute('transform', `translate(${x} ${y}) rotate(${rot0}) scale(${k})`);
+        this.gFx.append(c);
+        const start0 = performance.now();
+        this.addAnim((now) => {
+          const t = (now - start0) / life;
+          const sy = ic.flap ? 0.6 + 0.4 * Math.abs(Math.cos(t * 18)) : 1;
+          c.style.opacity = String(Math.max(0, 1 - t));
+          c.setAttribute('transform', `translate(${x + dx * t} ${y - rise * t}) rotate(${rot0 + ic.spin * t}) scale(${k} ${k * sy})`);
+          if (t >= 1) { c.remove(); return false; }
+          return true;
+        });
+        return;
       } else if (kind === 'heart') {
         const k = 0.12 + Math.random() * 0.06;
         c = s('path', { d: 'M0 0.35C-0.5 0 -0.55 -0.35 -0.3 -0.45C-0.12 -0.52 0 -0.38 0 -0.28C0 -0.38 0.12 -0.52 0.3 -0.45C0.55 -0.35 0.5 0 0 0.35Z' });
@@ -1534,7 +1585,17 @@
         const rr = Math.max(1, fx.r * cam.S * q[2]);
         const css = fx.white ? `rgba(255,255,255,${fx.a})` : rgbToCss(fx.rgb || this.col.arrows[fx.color % 8], fx.a);
         ctx.beginPath();
-        if (fx.shape === 'heart') {
+        if (fx.shape === 'icon') {
+          const ic = ICONS[fx.icon];
+          ctx.save();
+          ctx.globalAlpha = fx.a;
+          ctx.translate(q[0], q[1]);
+          ctx.rotate(fx.rot + (ic.spin * Math.PI / 180) * (1 - fx.a));
+          ctx.scale(rr * 2, rr * 2 * (ic.flap ? 0.6 + 0.4 * Math.abs(Math.cos((1 - fx.a) * 18)) : 1));
+          ctx.fillStyle = fx.iconFill; ctx.fill(getPath2D(fx.icon), ic.evenodd ? 'evenodd' : 'nonzero');
+          ctx.lineWidth = 0.06; ctx.lineJoin = 'round'; ctx.strokeStyle = ic.stroke; ctx.stroke(getPath2D(fx.icon));
+          ctx.restore();
+        } else if (fx.shape === 'heart') {
           const x = q[0], y = q[1];
           ctx.moveTo(x, y + rr * 0.7);
           ctx.bezierCurveTo(x - rr * 1.1, y, x - rr * 1.1, y - rr * 0.9, x - rr * 0.6, y - rr * 0.95);
@@ -1589,6 +1650,7 @@
           const k = tr.specks, up = geo.normal;
           if (k === 'bubble') this.particle(q, [up[0] * 0.9, up[1] * 0.9, up[2] * 0.9], geo.a.color, 0.1 + Math.random() * 0.06, 800, false, 'bubble');
           else if (k === 'heart') this.particle(q, [up[0] * 0.7, up[1] * 0.7, up[2] * 0.7], geo.a.color, 0.15 + Math.random() * 0.05, 850, false, 'heart', Math.random() < 0.5 ? hexToRgb(HEART_PINK) : null);
+          else if (k === 'icon') { const ic = ICONS[tr.icon]; this.particle(q, [up[0] * ic.rise * 1.4, up[1] * ic.rise * 1.4, up[2] * ic.rise * 1.4], 0, 0.26 + Math.random() * 0.06, 900, false, 'icon', null, tr.icon); }
           else if (k === 'gold') this.particle(q, [0, 0, 0], 0, 0.05 + Math.random() * 0.05, 420, false, 'dot', hexToRgb(Math.random() < 0.4 ? GOLD_LIGHT : GOLD));
           else this.particle(q, [0, 0, 0], geo.a.color + Math.floor(Math.random() * 3), 0.05 + Math.random() * 0.05, 400, Math.random() < 0.35);
         }
@@ -1609,8 +1671,8 @@
       });
       this.kick();
     }
-    particle(p, v, color, r, life, white, shape, rgb) {
-      const fx = { kind: 'dot', p, color, r, a: 1, white, shape: shape || 'dot', rgb };
+    particle(p, v, color, r, life, white, shape, rgb, icon) {
+      const fx = { kind: 'dot', p, color, r, a: 1, white, shape: shape || 'dot', rgb, icon, iconFill: icon ? iconFill(ICONS[icon]) : null, rot: (Math.random() - 0.5) * 0.5 };
       this.fx.push(fx);
       const start = performance.now(), p0 = p.slice();
       this.anims.add((now) => {
@@ -2930,6 +2992,13 @@
       [[0.55, 0.45, 0.32, HEART_PINK], [1.3, 0.55, 0.26, 'var(--a4)'], [2.05, 0.35, 0.3, HEART_PINK], [0.95, 0.15, 0.2, 'var(--a4)']]
         .forEach(([x, yy, k, f]) => { fx += `<path transform="translate(${x} ${yy}) scale(${k})" fill="${f}" d="M0 0.35C-0.5 0 -0.55 -0.35 -0.3 -0.45C-0.12 -0.52 0 -0.38 0 -0.28C0 -0.38 0.12 -0.52 0.3 -0.45C0.55 -0.35 0.5 0 0 0.35Z"/>`; });
     }
+    if (tr.specks === 'icon') {
+      const ic = ICONS[tr.icon];
+      [[0.5, 0.5, 0.42, -12], [1.25, 0.3, 0.36, 10], [2.05, 0.55, 0.4, -6]].forEach(([x, yy, k, r], i) => {
+        const f = ic.fill || CANDY_COLORS[i % CANDY_COLORS.length];
+        fx += `<path transform="translate(${x} ${yy}) rotate(${r}) scale(${k})" d="${ic.d}" fill="${f}" fill-rule="${ic.evenodd ? 'evenodd' : 'nonzero'}" stroke="${ic.stroke}" stroke-width="0.06" stroke-linejoin="round"/>`;
+      });
+    }
     let arrow = previewArrow([[tail, y], [tail + 2, y]], 4);
     if (tr.firework) {
       for (let i = 0; i < 12; i++) {
@@ -2945,6 +3014,7 @@
     const owned = pr.owned[kind].includes(item.id);
     if (!owned) {
       if (pr.coins < item.price) return;
+      if (item.season && item.season !== seasonNow()) return; // holiday items only sell in their month
       pr.coins -= item.price;
       pr.owned[kind].push(item.id);
       Sound.play('complete');
@@ -2959,27 +3029,43 @@
     $('#style-coins').textContent = fmtNum(pr.coins);
     const wrap = $('#style-sections');
     wrap.textContent = '';
+    const season = seasonNow();
+    const kindLabel = Object.fromEntries(STYLE_KINDS);
+    const card = (kind, it, tag) => {
+      const owned = pr.owned[kind].includes(it.id);
+      const on = pr.equip[kind] === it.id;
+      const prev = kind === 'arrows' ? previewBoard(5, 3, PREVIEW_ARROWS(), it.id, null, true)
+        : kind === 'board' ? previewBoard(5, 3, PREVIEW_ARROWS(), null, it.id)
+        : trailPreview(it.id);
+      let label, cls = 'style-btn', disabled = false;
+      if (on) { label = 'Equipped'; cls += ' is-on'; disabled = true; }
+      else if (owned) label = 'Use';
+      else if (pr.coins >= it.price) { label = ''; cls += ' is-buy'; }
+      else { label = ''; cls += ' is-locked'; disabled = true; }
+      const btn = h('button', { class: cls, type: 'button', onclick: () => buyOrEquip(kind, it) });
+      if (label) btn.textContent = label;
+      else btn.innerHTML = `${COIN_SVG}<span>${fmtNum(it.price)}</span>`;
+      btn.disabled = disabled;
+      if (!owned) btn.setAttribute('aria-label', pr.coins >= it.price ? `Buy ${it.name} for ${it.price} coins` : `${it.name}: needs ${it.price - pr.coins} more coins`);
+      return h('div', { class: 'style-card' + (on ? ' is-on' : '') }, prev,
+        h('div', { class: 'style-meta' }, tag ? h('small', { class: 'style-kind', text: tag }) : null, h('strong', { text: it.name }), it.desc ? h('span', { text: it.desc }) : null), btn);
+    };
+    // Holiday section first while its month is on.
+    if (season) {
+      const S = SEASONS[season];
+      const grid = h('div', { class: 'style-grid' });
+      for (const [kind] of STYLE_KINDS) for (const it of STYLE[kind]) if (it.season === season) grid.append(card(kind, it, kindLabel[kind]));
+      wrap.append(h('section', { class: 'style-section style-holiday holiday-' + season },
+        h('h3', null, `${S.emoji} ${S.name}`, h('span', { class: 'holiday-until', text: `Until ${S.until}` })),
+        h('p', { class: 'style-note', text: 'Limited time! These leave the Shop when the month ends, but anything you buy is yours to keep.' }), grid));
+    }
     for (const [kind, title] of STYLE_KINDS) {
       const grid = h('div', { class: 'style-grid' });
       for (const it of STYLE[kind]) {
-        const owned = pr.owned[kind].includes(it.id);
-        const on = pr.equip[kind] === it.id;
-        const prev = kind === 'arrows' ? previewBoard(5, 3, PREVIEW_ARROWS(), it.id, null, true)
-          : kind === 'board' ? previewBoard(5, 3, PREVIEW_ARROWS(), null, it.id)
-          : trailPreview(it.id);
-        let label, cls = 'style-btn', disabled = false;
-        if (on) { label = 'Equipped'; cls += ' is-on'; disabled = true; }
-        else if (owned) label = 'Use';
-        else if (pr.coins >= it.price) { label = ''; cls += ' is-buy'; }
-        else { label = ''; cls += ' is-locked'; disabled = true; }
-        const btn = h('button', { class: cls, type: 'button', onclick: () => buyOrEquip(kind, it) });
-        if (label) btn.textContent = label;
-        else btn.innerHTML = `${COIN_SVG}<span>${fmtNum(it.price)}</span>`;
-        btn.disabled = disabled;
-        if (!owned) btn.setAttribute('aria-label', pr.coins >= it.price ? `Buy ${it.name} for ${it.price} coins` : `${it.name}: needs ${it.price - pr.coins} more coins`);
-        const card = h('div', { class: 'style-card' + (on ? ' is-on' : '') }, prev,
-          h('div', { class: 'style-meta' }, h('strong', { text: it.name }), it.desc ? h('span', { text: it.desc }) : null), btn);
-        grid.append(card);
+        // Holiday items live in their own section while on sale; after that,
+        // only ones you own show up here so you can still pick them.
+        if (it.season && (it.season === season || !pr.owned[kind].includes(it.id))) continue;
+        grid.append(card(kind, it));
       }
       const note = kind === 'arrows' && Save.data.settings.colorblind
         ? h('p', { class: 'style-note', text: 'Color-blind friendly colors are on in Settings, so puzzles use those instead of a theme. Turn them off to use these.' }) : null;
