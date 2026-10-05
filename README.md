@@ -51,7 +51,7 @@ and it appears in Zen automatically.
 
 ## Time Attack
 
-Three minutes to clear as many 2D boards as you can, on Easy, Medium, Hard or Expert. Boards come from the Zen generator with fresh seeds, and the next one is built in the background so there's no wait. A blocked tap costs 5 seconds; there are no hints or hearts. Your best run per difficulty (boards, then arrows) is kept in `timed.best`. Pays coins per board (1 / 2 / 4 / 6) plus 1 per 10 arrows.
+Three minutes to clear as many 2D boards as you can, on Easy, Medium, Hard or Expert. Boards come from the Zen generator with fresh seeds, and the next one is built in the background so there's no wait. A blocked tap costs 5 seconds; there are no hints or hearts. Your best run per difficulty (boards, then arrows) is kept in `timed.best`. Pays coins per board (3 / 5 / 8 / 12) plus 1 per 10 arrows.
 
 ## Undo and close calls
 

@@ -425,6 +425,7 @@
       { id: 'autumn', name: 'Autumn', price: 150 },
       { id: 'berry', name: 'Berry', price: 180 },
       { id: 'aurora', name: 'Aurora', price: 250 },
+      { id: 'psychedelic', name: 'Psychedelic', price: 400, desc: 'Colors that never sit still' },
       { id: 'halloween', name: 'Halloween', price: 200, season: 'halloween', desc: 'Orange, purple and black' },
     ],
     board: [
@@ -532,14 +533,17 @@
   const CANDY_COLORS = ['#ff5fa2', '#3fd0c9', '#ffd23f', '#9b6bff'];
   const ICONS = {
     pumpkin: { d: 'M0 -0.26C0.3 -0.34 0.48 -0.14 0.48 0.07C0.48 0.31 0.26 0.4 0 0.37C-0.26 0.4 -0.48 0.31 -0.48 0.07C-0.48 -0.14 -0.3 -0.34 0 -0.26ZM-0.06 -0.26L-0.03 -0.46L0.09 -0.43L0.05 -0.26Z',
-      fill: '#ff7b1c', stroke: '#8a3500', rise: 0.15, spin: 50 },
+      fill: '#ff7b1c', stroke: '#8a3500', rise: 0.15, spin: 140, tilt: 180 },
     bat: { d: 'M0 -0.08C0.06 -0.2 0.13 -0.2 0.17 -0.1C0.27 -0.24 0.4 -0.24 0.5 -0.13C0.42 -0.06 0.4 0.03 0.42 0.13C0.34 0.06 0.26 0.08 0.21 0.15C0.15 0.07 0.07 0.07 0 0.17C-0.07 0.07 -0.15 0.07 -0.21 0.15C-0.26 0.08 -0.34 0.06 -0.42 0.13C-0.4 0.03 -0.42 -0.06 -0.5 -0.13C-0.4 -0.24 -0.27 -0.24 -0.17 -0.1C-0.13 -0.2 -0.06 -0.2 0 -0.08Z',
-      fill: '#2a1b3d', stroke: '#b78cf0', rise: 0.7, spin: 0, flap: true },
+      fill: '#2a1b3d', stroke: '#b78cf0', rise: 0.7, spin: 60, tilt: 50, flap: true },
     ghost: { d: 'M-0.3 0.4L-0.3 -0.08C-0.3 -0.5 0.3 -0.5 0.3 -0.08L0.3 0.4L0.18 0.3L0.06 0.4L-0.06 0.3L-0.18 0.4ZM-0.15 -0.13a0.055 0.075 0 1 0 0.11 0a0.055 0.075 0 1 0 -0.11 0ZM0.04 -0.13a0.055 0.075 0 1 0 0.11 0a0.055 0.075 0 1 0 -0.11 0Z',
-      fill: '#f7f5ff', stroke: '#6b6b84', rise: 0.6, spin: 0, evenodd: true },
+      fill: '#f7f5ff', stroke: '#6b6b84', rise: 0.6, spin: 50, tilt: 40, evenodd: true },
     candy: { d: 'M-0.17 0a0.17 0.17 0 1 0 0.34 0a0.17 0.17 0 1 0 -0.34 0ZM-0.15 -0.06L-0.42 -0.2L-0.42 0.2L-0.15 0.06ZM0.15 -0.06L0.42 -0.2L0.42 0.2L0.15 0.06Z',
-      fill: null, stroke: 'rgba(0,0,0,0.35)', rise: 0.2, spin: 120 },
+      fill: null, stroke: 'rgba(0,0,0,0.35)', rise: 0.2, spin: 300, tilt: 180 },
   };
+  /* Random look for each speck: a starting tilt (up to ±tilt degrees) and a
+     spin that turns either way, between half and the full `spin` amount. */
+  const iconTurn = (ic) => ({ rot0: (Math.random() * 2 - 1) * ic.tilt, spin: (Math.random() < 0.5 ? -1 : 1) * ic.spin * (0.5 + Math.random() * 0.5) });
   const iconFill = (ic) => ic.fill || CANDY_COLORS[Math.floor(Math.random() * CANDY_COLORS.length)];
   const iconPath2D = {};
   const getPath2D = (name) => iconPath2D[name] || (iconPath2D[name] = new Path2D(ICONS[name].d));
@@ -796,7 +800,7 @@
         c.style.fill = 'none'; c.style.stroke = `var(--a${color % 8})`; c.style.strokeWidth = '0.035';
         life = 650 + Math.random() * 300; rise = 0.55; grow = 0.6;
       } else if (kind === 'icon') {
-        const ic = ICONS[iconName], k = 0.5 + Math.random() * 0.15, rot0 = (Math.random() - 0.5) * 30;
+        const ic = ICONS[iconName], k = 0.75 + Math.random() * 0.2, turn = iconTurn(ic), rot0 = turn.rot0;
         c = s('path', { d: ic.d, 'fill-rule': ic.evenodd ? 'evenodd' : 'nonzero' });
         c.style.fill = iconFill(ic); c.style.stroke = ic.stroke; c.style.strokeWidth = '0.06'; c.style.strokeLinejoin = 'round';
         life = 750 + Math.random() * 300; rise = ic.rise;
@@ -808,13 +812,13 @@
           const t = (now - start0) / life;
           const sy = ic.flap ? 0.6 + 0.4 * Math.abs(Math.cos(t * 18)) : 1;
           c.style.opacity = String(Math.max(0, 1 - t));
-          c.setAttribute('transform', `translate(${x + dx * t} ${y - rise * t}) rotate(${rot0 + ic.spin * t}) scale(${k} ${k * sy})`);
+          c.setAttribute('transform', `translate(${x + dx * t} ${y - rise * t}) rotate(${rot0 + turn.spin * t}) scale(${k} ${k * sy})`);
           if (t >= 1) { c.remove(); return false; }
           return true;
         });
         return;
       } else if (kind === 'heart') {
-        const k = 0.12 + Math.random() * 0.06;
+        const k = 0.17 + Math.random() * 0.07;
         c = s('path', { d: 'M0 0.35C-0.5 0 -0.55 -0.35 -0.3 -0.45C-0.12 -0.52 0 -0.38 0 -0.28C0 -0.38 0.12 -0.52 0.3 -0.45C0.55 -0.35 0.5 0 0 0.35Z' });
         c.style.fill = Math.random() < 0.5 ? HEART_PINK : `var(--a${color % 8})`;
         c.dataset.k = k; life = 700 + Math.random() * 300; rise = 0.45;
@@ -1234,6 +1238,10 @@
         return fromOklch([Math.max(0.6, L - 0.2), C + 0.09, H]);
       };
       this.outlineCol = this.col.arrows.map(outlineOf);
+      this.outlineOf = outlineOf;
+      // Psychedelic: keep the base colors and turn their hue every frame.
+      this.psy = /\bth-psychedelic\b/.test(cls) && !/\bcvd\b/.test(cls) && !reducedMotion();
+      this.psyBase = this.col.arrows.map((c) => toOklch(c));
       this.stuckOutline = outlineOf(this.col.stuck);
       this.dirty = true; this.kick();
     }
@@ -1332,7 +1340,12 @@
         this.spin.dx *= 0.92; this.spin.dy *= 0.92;
         if (Math.abs(this.spin.dx) + Math.abs(this.spin.dy) < 0.15) this.spin = null;
       }
-      const pulsing = this.stuck && this.stuck.size > 0 && !reducedMotion();
+      const pulsing = (this.stuck && this.stuck.size > 0 && !reducedMotion()) || (this.psy && this.canvas.offsetParent !== null);
+      if (this.psy) {
+        const turn = ((now / 6000) % 1) * 360; // one full trip round the wheel every 6 s, like the flat board
+        this.col.arrows = this.psyBase.map(([L, C, H]) => fromOklch([L, C, (H + turn) % 360]));
+        this.outlineCol = this.col.arrows.map(this.outlineOf);
+      }
       if (this.dirty || pulsing || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.draw(now);
       if (pulsing || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.raf = requestAnimationFrame(this.loop);
     }
@@ -1590,7 +1603,7 @@
           ctx.save();
           ctx.globalAlpha = fx.a;
           ctx.translate(q[0], q[1]);
-          ctx.rotate(fx.rot + (ic.spin * Math.PI / 180) * (1 - fx.a));
+          ctx.rotate(fx.rot + (fx.spin * Math.PI / 180) * (1 - fx.a));
           ctx.scale(rr * 2, rr * 2 * (ic.flap ? 0.6 + 0.4 * Math.abs(Math.cos((1 - fx.a) * 18)) : 1));
           ctx.fillStyle = fx.iconFill; ctx.fill(getPath2D(fx.icon), ic.evenodd ? 'evenodd' : 'nonzero');
           ctx.lineWidth = 0.06; ctx.lineJoin = 'round'; ctx.strokeStyle = ic.stroke; ctx.stroke(getPath2D(fx.icon));
@@ -1649,8 +1662,8 @@
           const q = [p[0] + (Math.random() - 0.5) * 0.3, p[1] + (Math.random() - 0.5) * 0.3, p[2] + (Math.random() - 0.5) * 0.3];
           const k = tr.specks, up = geo.normal;
           if (k === 'bubble') this.particle(q, [up[0] * 0.9, up[1] * 0.9, up[2] * 0.9], geo.a.color, 0.1 + Math.random() * 0.06, 800, false, 'bubble');
-          else if (k === 'heart') this.particle(q, [up[0] * 0.7, up[1] * 0.7, up[2] * 0.7], geo.a.color, 0.15 + Math.random() * 0.05, 850, false, 'heart', Math.random() < 0.5 ? hexToRgb(HEART_PINK) : null);
-          else if (k === 'icon') { const ic = ICONS[tr.icon]; this.particle(q, [up[0] * ic.rise * 1.4, up[1] * ic.rise * 1.4, up[2] * ic.rise * 1.4], 0, 0.26 + Math.random() * 0.06, 900, false, 'icon', null, tr.icon); }
+          else if (k === 'heart') this.particle(q, [up[0] * 0.7, up[1] * 0.7, up[2] * 0.7], geo.a.color, 0.21 + Math.random() * 0.06, 850, false, 'heart', Math.random() < 0.5 ? hexToRgb(HEART_PINK) : null);
+          else if (k === 'icon') { const ic = ICONS[tr.icon]; this.particle(q, [up[0] * ic.rise * 1.4, up[1] * ic.rise * 1.4, up[2] * ic.rise * 1.4], 0, 0.38 + Math.random() * 0.08, 900, false, 'icon', null, tr.icon); }
           else if (k === 'gold') this.particle(q, [0, 0, 0], 0, 0.05 + Math.random() * 0.05, 420, false, 'dot', hexToRgb(Math.random() < 0.4 ? GOLD_LIGHT : GOLD));
           else this.particle(q, [0, 0, 0], geo.a.color + Math.floor(Math.random() * 3), 0.05 + Math.random() * 0.05, 400, Math.random() < 0.35);
         }
@@ -1672,7 +1685,8 @@
       this.kick();
     }
     particle(p, v, color, r, life, white, shape, rgb, icon) {
-      const fx = { kind: 'dot', p, color, r, a: 1, white, shape: shape || 'dot', rgb, icon, iconFill: icon ? iconFill(ICONS[icon]) : null, rot: (Math.random() - 0.5) * 0.5 };
+      const fx = { kind: 'dot', p, color, r, a: 1, white, shape: shape || 'dot', rgb, icon, iconFill: icon ? iconFill(ICONS[icon]) : null, rot: 0, spin: 0 };
+      if (icon) { const tn = iconTurn(ICONS[icon]); fx.rot = tn.rot0 * Math.PI / 180; fx.spin = tn.spin; }
       this.fx.push(fx);
       const start = performance.now(), p0 = p.slice();
       this.anims.add((now) => {
@@ -2025,7 +2039,7 @@
      background while you play, so there's no wait between boards. */
   const TIMED_MS = 180000, TIMED_PENALTY = 5000, TIMED_HURRY = 15000;
   const TIMED_DIFFS = ['easy', 'medium', 'hard', 'expert'];
-  const TIMED_COINS = { easy: 1, medium: 2, hard: 4, expert: 6 }; // coins per board cleared
+  const TIMED_COINS = { easy: 3, medium: 5, hard: 8, expert: 12 }; // coins per board cleared
   const TIMED_INFO = { easy: 'Small, quick boards. Go for a big count.', medium: 'A little bigger. Keep a steady pace.', hard: 'Bigger mazes. Every blocked tap hurts.', expert: 'Big boards. Clearing even a few is a win.' };
   const timedSeed = () => 'ta.' + newZenSeed();
   const timedBest = (d) => (Save.data.timed.best[d] || null);
@@ -2580,10 +2594,13 @@
   }
   const levelUpCoins = (L) => 15 + 5 * L;
   /** XP and coins for one clear. `replay` = this board was already cleared before. */
+  /* Extra coins for every clear, by difficulty, so Shop items (mostly 100+)
+     are reachable at a fair pace. Zen and replays scale this too. */
+  const COIN_BONUS = { easy: 5, medium: 6, hard: 7, expert: 8, nightmare: 8, insane: 9, impossible: 10, inconceivable: 10 };
   function rewardFor(mode, diff, stars, replay) {
     const base = XP_BASE[diff] || 10;
     let xp = base + (stars - 1) * Math.round(base * 0.25);
-    let coins = 1 + stars + Math.round(base / 10);
+    let coins = 1 + stars + Math.round(base / 10) + (COIN_BONUS[diff] || 5);
     if (mode === 'zen') { xp = Math.round(xp * 0.6); coins = Math.max(1, Math.round(coins * 0.6)); }
     if (replay) { xp = Math.max(1, Math.round(xp / 2)); coins = Math.max(1, Math.round(coins / 2)); }
     if (mode === 'daily' && !replay) { xp += 20; coins += 10; }
@@ -2994,7 +3011,7 @@
     }
     if (tr.specks === 'icon') {
       const ic = ICONS[tr.icon];
-      [[0.5, 0.5, 0.42, -12], [1.25, 0.3, 0.36, 10], [2.05, 0.55, 0.4, -6]].forEach(([x, yy, k, r], i) => {
+      [[0.45, 0.5, 0.62, -12], [1.3, 0.38, 0.54, 10], [2.15, 0.55, 0.6, -6]].forEach(([x, yy, k, r], i) => {
         const f = ic.fill || CANDY_COLORS[i % CANDY_COLORS.length];
         fx += `<path transform="translate(${x} ${yy}) rotate(${r}) scale(${k})" d="${ic.d}" fill="${f}" fill-rule="${ic.evenodd ? 'evenodd' : 'nonzero'}" stroke="${ic.stroke}" stroke-width="0.06" stroke-linejoin="round"/>`;
       });
@@ -3846,12 +3863,12 @@
       $('#q-outline').value = ['auto', 'on', 'off'].includes(st.outline) ? st.outline : 'auto';
       $('#q-speed').value = ESCAPE_SPEEDS[st.speed] ? st.speed : 'normal';
       $('#q-theme').value = ['light', 'dark'].includes(st.theme) ? st.theme : 'auto';
-      for (const [kind, id] of [['arrows', '#q-arrows'], ['board', '#q-board']]) {
+      for (const [kind, id] of [['arrows', '#q-arrows'], ['board', '#q-board'], ['trail', '#q-trail']]) {
         const sel = $(id);
         sel.textContent = '';
         for (const it of STYLE[kind]) if (pr.owned[kind].includes(it.id)) sel.append(h('option', { value: it.id, text: it.name }));
         sel.value = pr.equip[kind];
-        sel.closest('.setting').hidden = sel.options.length < 2; // nothing to switch between yet
+        sel.closest('.setting').hidden = false; // always shown, even with only the starter look owned
       }
       $('#quick-overlay').hidden = false;
       $('#quick-done').focus();
@@ -3889,6 +3906,7 @@
   $('#q-theme').addEventListener('change', (e) => { Save.data.settings.theme = e.target.value; applyTheme(); Save.soon(); });
   $('#q-arrows').addEventListener('change', (e) => { Save.data.progress.equip.arrows = e.target.value; Quick.refreshBoard(); });
   $('#q-board').addEventListener('change', (e) => { Save.data.progress.equip.board = e.target.value; Quick.refreshBoard(); });
+  $('#q-trail').addEventListener('change', (e) => { Save.data.progress.equip.trail = e.target.value; Save.soon(); });
 
   /* ======================================================================
      DEBUG / DEVELOPER TOOLS (hidden: Settings → tap the version line
