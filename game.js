@@ -62,7 +62,7 @@
   function defaultSave() {
     return {
       v: 1,
-      settings: { sound: true, motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', colorblind: false, highContrast: false, preview: true, autoRelease: true, dev: false },
+      settings: { sound: true, theme: 'auto', motion: 'auto', speed: 'normal', thickness: 'normal', outline: 'auto', colorblind: false, highContrast: false, preview: true, autoRelease: true, dev: false },
       campaign: { unlocked: 1, levels: {}, bonus: {} },
       daily: { history: {}, longestStreak: 0, unlocked: {} }, // unlocked: past days bought with coins
       startedOn: null, // first day this player opened the game
@@ -455,11 +455,26 @@
   /** Put the equipped (or given) arrow theme and board on an SVG board. */
   const OUTLINED_THEMES = ['pastel', 'sunset', 'ocean'];
   const lightQuery = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+  /* Appearance (Settings): Auto follows the device; Light or Dark forces it
+     by setting data-theme on <html> (styles.css has both palettes). */
+  const isLightUI = () => {
+    const t = Save.data && Save.data.settings.theme;
+    return t === 'light' || (t !== 'dark' && !!(lightQuery && lightQuery.matches));
+  };
+  function applyTheme() {
+    const t = Save.data.settings.theme;
+    const root = document.documentElement;
+    if (t === 'light' || t === 'dark') root.setAttribute('data-theme', t); else root.removeAttribute('data-theme');
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', isLightUI() ? '#eceff9' : '#121329');
+    for (const el of document.querySelectorAll('.skin')) if (el.id) applySkin(el);
+    if (typeof Game !== 'undefined' && Game.cubeView && Game.cubeView.p) Game.cubeView.refreshColors();
+  }
   function applySkin(svg, arrows, board, ignoreCvd) {
     const eq = Save.data.progress.equip;
     const b = styleItem('board', board || eq.board);
     const th = styleItem('arrows', arrows || eq.arrows).id;
-    const lightBoard = b.tone === 'light' || (b.tone === 'auto' && !!(lightQuery && lightQuery.matches));
+    const lightBoard = b.tone === 'light' || (b.tone === 'auto' && isLightUI());
     const mode = Save.data.settings.outline || 'auto';
     const cvd = !!Save.data.settings.colorblind && !ignoreCvd;
     // Mid-tone boards (Lavender, Plum) sit between light and dark, so no
@@ -470,9 +485,7 @@
     svg.setAttribute('class', svg.getAttribute('class').replace(/\s*\b(skin|th-\S+|bg-\S+|tone-\S+|outline-on|on-dark|cvd)\b/g, '').trim() +
       ` skin th-${th} bg-${b.id} tone-${b.tone}` + (outline ? ' outline-on' : '') + (lightBoard || mid ? '' : ' on-dark') + (cvd ? ' cvd' : ''));
   }
-  if (lightQuery && lightQuery.addEventListener) lightQuery.addEventListener('change', () => {
-    for (const el of document.querySelectorAll('.skin')) if (el.id) applySkin(el);
-  });
+  if (lightQuery && lightQuery.addEventListener) lightQuery.addEventListener('change', () => applyTheme());
 
   /* Escape flight speeds (Settings → Arrow speed). Every speed launches
      on the tap, in step with the arrow sound, then glides off the board.
@@ -3457,6 +3470,7 @@
     $('#set-sound').checked = !!st.sound;
     $('#set-motion').value = st.motion;
     $('#set-speed').value = ESCAPE_SPEEDS[st.speed] ? st.speed : 'normal';
+    $('#set-theme').value = ['light', 'dark'].includes(st.theme) ? st.theme : 'auto';
     $('#set-thick').value = THICKNESS[st.thickness] ? st.thickness : 'normal';
     $('#set-outline').value = ['auto', 'on', 'off'].includes(st.outline) ? st.outline : 'auto';
     $('#set-cvd').checked = !!st.colorblind;
@@ -3470,6 +3484,7 @@
   $('#set-sound').addEventListener('change', (e) => { Save.data.settings.sound = e.target.checked; Save.soon(); if (e.target.checked) Sound.play('hint'); });
   $('#set-motion').addEventListener('change', (e) => { Save.data.settings.motion = e.target.value; applySettings(); Save.soon(); });
   $('#set-speed').addEventListener('change', (e) => { Save.data.settings.speed = e.target.value; Save.soon(); });
+  $('#set-theme').addEventListener('change', (e) => { Save.data.settings.theme = e.target.value; applyTheme(); Save.soon(); });
   function renderThickPreview() {
     const box = $('#thick-preview');
     box.textContent = '';
@@ -3744,6 +3759,7 @@
       $('#q-thick').value = THICKNESS[st.thickness] ? st.thickness : 'normal';
       $('#q-outline').value = ['auto', 'on', 'off'].includes(st.outline) ? st.outline : 'auto';
       $('#q-speed').value = ESCAPE_SPEEDS[st.speed] ? st.speed : 'normal';
+      $('#q-theme').value = ['light', 'dark'].includes(st.theme) ? st.theme : 'auto';
       for (const [kind, id] of [['arrows', '#q-arrows'], ['board', '#q-board']]) {
         const sel = $(id);
         sel.textContent = '';
@@ -3784,6 +3800,7 @@
   $('#q-outline').addEventListener('change', (e) => { Save.data.settings.outline = e.target.value; Quick.refreshBoard(); });
   $('#q-cvd').addEventListener('change', (e) => { Save.data.settings.colorblind = e.target.checked; Quick.refreshBoard(); });
   $('#q-speed').addEventListener('change', (e) => { Save.data.settings.speed = e.target.value; Save.soon(); });
+  $('#q-theme').addEventListener('change', (e) => { Save.data.settings.theme = e.target.value; applyTheme(); Save.soon(); });
   $('#q-arrows').addEventListener('change', (e) => { Save.data.progress.equip.arrows = e.target.value; Quick.refreshBoard(); });
   $('#q-board').addEventListener('change', (e) => { Save.data.progress.equip.board = e.target.value; Quick.refreshBoard(); });
 
@@ -4130,6 +4147,7 @@
     Save.data = fillDefaults(d, defaultSave());
     Save.data.route = 'home';
     Save.data.seenHowTo = true;
+    applyTheme();
     migrateStars();
     catchUpCampaign();
     migrateProgress();
@@ -4347,6 +4365,7 @@
 
   function boot() {
     Save.load();
+    applyTheme();
     if (/debug/.test(location.hash)) Save.data.settings.dev = true;
     migrateStars();
     catchUpCampaign();

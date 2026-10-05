@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Arrow Escape">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script>try { var t = (JSON.parse(localStorage.getItem('slipstream.save.v1') || '{}').settings || {}).theme; if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 <!--PAGE-START-->
 <title>Arrow Escape: All-In-One</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -303,6 +304,14 @@
           <input type="checkbox" class="switch" id="set-sound">
         </label>
         <label class="setting">
+          <span class="setting-text"><span class="setting-name">Appearance</span><span class="setting-sub">Light or dark look. Auto follows your device.</span></span>
+          <select id="set-theme" class="select">
+            <option value="auto">Auto</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
+        </label>
+        <label class="setting">
           <span class="setting-text"><span class="setting-name">Arrow thickness</span><span class="setting-sub">Thicker arrows are easier to see and tap</span></span>
           <select id="set-thick" class="select">
             <option value="thin">Thin</option>
@@ -482,6 +491,7 @@
       <p class="quick-note">The timer is paused while this is open.</p>
       <div class="quick-list">
         <label class="setting"><span class="setting-text"><span class="setting-name">Sound</span></span><input type="checkbox" class="switch" id="q-sound"></label>
+        <label class="setting"><span class="setting-text"><span class="setting-name">Appearance</span></span><select id="q-theme" class="select"><option value="auto">Auto</option><option value="light">Light</option><option value="dark">Dark</option></select></label>
         <label class="setting"><span class="setting-text"><span class="setting-name">Arrow thickness</span></span>
           <select id="q-thick" class="select"><option value="thin">Thin</option><option value="normal">Normal</option><option value="thick">Thick</option></select></label>
         <label class="setting"><span class="setting-text"><span class="setting-name">Arrow outlines</span></span>
