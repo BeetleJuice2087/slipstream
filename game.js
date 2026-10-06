@@ -487,7 +487,7 @@
      every frame and made flights stutter on phones), a light timer steps the
      8 colors around the hue wheel ~8 times a second, and skips a board while
      an arrow is flying on it. Colors come from a precomputed table. */
-  const PSY_STEPS = 48, PSY_MS = 8000, PSY_MS_3D = 14000;
+  const PSY_STEPS = 72, PSY_MS = 15000, PSY_MS_3D = 15000; // one trip round the rainbow every 15 s
   let psyTable = null;
   function psyColors() {
     if (psyTable) return psyTable;
@@ -495,7 +495,7 @@
     for (let k = 0; k < PSY_STEPS; k++) {
       const row = {};
       for (let i = 0; i < 8; i++) {
-        const H = (i * 45 + (k * 360) / PSY_STEPS + 20) % 360;
+        const H = (((i * 45 + (k * 360) / PSY_STEPS + 20) % 360) * Math.PI) / 180; // fromOklch takes radians
         row['--pd' + i] = rgbToCss(fromOklch([0.76, 0.2, H]));
         row['--pl' + i] = rgbToCss(fromOklch([0.55, 0.19, H]));
       }
@@ -1391,8 +1391,8 @@
         const step = Math.floor(((now % PSY_MS_3D) / PSY_MS_3D) * PSY_STEPS);
         if (step !== this.psyStep) {
           this.psyStep = step;
-          const turn = (step * 360) / PSY_STEPS;
-          this.col.arrows = this.psyBase.map(([L, C, H]) => fromOklch([L, C, (H + turn) % 360]));
+          const turn = (step * 2 * Math.PI) / PSY_STEPS; // toOklch/fromOklch use radians
+          this.col.arrows = this.psyBase.map(([L, C, H]) => fromOklch([L, C, H + turn]));
           this.outlineCol = this.col.arrows.map(this.outlineOf);
           this.dirty = true;
         }
