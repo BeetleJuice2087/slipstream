@@ -287,6 +287,7 @@ kbd {
 
 .home-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .pill-btn.wide { grid-column: 1 / -1; }
+
 .pill-btn svg circle { fill: none; }
 
 /* ---------------- How to play ---------------- */
@@ -1055,46 +1056,11 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
   --l0: #059a5e; --l1: #06775d; --l2: #076892; --l3: #514aab; --l4: #64257c; --l5: #1e3a7a; --l6: #018eb4; --l7: #b0258f; }
 .skin.th-halloween { --d0: #f78302; --d1: #cc90ff; --d2: #f3edd6; --d3: #7be04a; --d4: #ffc93c; --d5: #fe3854; --d6: #ed43ca; --d7: #b6bfd3;
   --l0: #e34300; --l1: #5224a4; --l2: #1a1a1a; --l3: #218d2b; --l4: #8f6200; --l5: #a40014; --l6: #9e1c89; --l7: #505b73; }
-/* Psychedelic arrows: every color slot keeps travelling around the hue
-   wheel, 45° apart, so arrows stay different from each other while they all
-   shift. Needs @property (registered colors); browsers without it just show
-   the starting rainbow. Turned off for reduced motion. */
-@property --pd0 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pl0 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pd1 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pl1 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pd2 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pl2 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pd3 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pl3 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pd4 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pl4 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pd5 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pl5 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pd6 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pl6 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pd7 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@property --pl7 { syntax: '<color>'; inherits: true; initial-value: #888; }
-@keyframes psychedelic {
-  0.0% { --pd0: #fd8a8c; --pl0: #d0183a; --pd1: #f8970e; --pl1: #a16004; --pd2: #b8b90c; --pl2: #767707; --pd3: #00d27a; --pl3: #08884d; --pd4: #0cc9d1; --pl4: #008287; --pd5: #61b9ff; --pl5: #0177bc; --pd6: #b0a2ff; --pl6: #754fe0; --pd7: #ff74e5; --pl7: #b52ca1; }
-  8.33% { --pd0: #fe904d; --pl0: #b25200; --pd1: #d0af00; --pl1: #86700a; --pd2: #55d034; --pl2: #278800; --pd3: #12ccbc; --pl3: #0f8379; --pd4: #18c1fc; --pl4: #007ca5; --pd5: #9babfd; --pl5: #545be9; --pd6: #e781fe; --pl6: #a438bb; --pd7: #fe86a4; --pl7: #cb1861; }
-  16.67% { --pd0: #e4a409; --pl0: #946900; --pd1: #96c410; --pl1: #5f7e01; --pd2: #14cfa3; --pl2: #0d8568; --pd3: #14c5e5; --pl3: #0f7f94; --pd4: #84b2fd; --pl4: #1368e9; --pd5: #c896fe; --pl5: #8f43d1; --pd6: #fe80c0; --pl6: #c22182; --pd7: #fe8d70; --pl7: #c93200; }
-  25.0% { --pd0: #b8b90c; --pl0: #767707; --pd1: #00d27a; --pl1: #08884d; --pd2: #0cc9d1; --pl2: #008287; --pd3: #61b9ff; --pl3: #0177bc; --pd4: #b0a2ff; --pl4: #754fe0; --pd5: #ff74e5; --pl5: #b52ca1; --pd6: #fd8a8c; --pl6: #d0183a; --pd7: #f8970e; --pl7: #a16004; }
-  33.33% { --pd0: #55d034; --pl0: #278800; --pd1: #12ccbc; --pl1: #0f8379; --pd2: #18c1fc; --pl2: #007ca5; --pd3: #9babfd; --pl3: #545be9; --pd4: #e781fe; --pl4: #a438bb; --pd5: #fe86a4; --pl5: #cb1861; --pd6: #fe904d; --pl6: #b25200; --pd7: #d0af00; --pl7: #86700a; }
-  41.67% { --pd0: #14cfa3; --pl0: #0d8568; --pd1: #14c5e5; --pl1: #0f7f94; --pd2: #84b2fd; --pl2: #1368e9; --pd3: #c896fe; --pl3: #8f43d1; --pd4: #fe80c0; --pl4: #c22182; --pd5: #fe8d70; --pl5: #c93200; --pd6: #e4a409; --pl6: #946900; --pd7: #96c410; --pl7: #5f7e01; }
-  50.0% { --pd0: #0cc9d1; --pl0: #008287; --pd1: #61b9ff; --pl1: #0177bc; --pd2: #b0a2ff; --pl2: #754fe0; --pd3: #ff74e5; --pl3: #b52ca1; --pd4: #fd8a8c; --pl4: #d0183a; --pd5: #f8970e; --pl5: #a16004; --pd6: #b8b90c; --pl6: #767707; --pd7: #00d27a; --pl7: #08884d; }
-  58.33% { --pd0: #18c1fc; --pl0: #007ca5; --pd1: #9babfd; --pl1: #545be9; --pd2: #e781fe; --pl2: #a438bb; --pd3: #fe86a4; --pl3: #cb1861; --pd4: #fe904d; --pl4: #b25200; --pd5: #d0af00; --pl5: #86700a; --pd6: #55d034; --pl6: #278800; --pd7: #12ccbc; --pl7: #0f8379; }
-  66.67% { --pd0: #84b2fd; --pl0: #1368e9; --pd1: #c896fe; --pl1: #8f43d1; --pd2: #fe80c0; --pl2: #c22182; --pd3: #fe8d70; --pl3: #c93200; --pd4: #e4a409; --pl4: #946900; --pd5: #96c410; --pl5: #5f7e01; --pd6: #14cfa3; --pl6: #0d8568; --pd7: #14c5e5; --pl7: #0f7f94; }
-  75.0% { --pd0: #b0a2ff; --pl0: #754fe0; --pd1: #ff74e5; --pl1: #b52ca1; --pd2: #fd8a8c; --pl2: #d0183a; --pd3: #f8970e; --pl3: #a16004; --pd4: #b8b90c; --pl4: #767707; --pd5: #00d27a; --pl5: #08884d; --pd6: #0cc9d1; --pl6: #008287; --pd7: #61b9ff; --pl7: #0177bc; }
-  83.33% { --pd0: #e781fe; --pl0: #a438bb; --pd1: #fe86a4; --pl1: #cb1861; --pd2: #fe904d; --pl2: #b25200; --pd3: #d0af00; --pl3: #86700a; --pd4: #55d034; --pl4: #278800; --pd5: #12ccbc; --pl5: #0f8379; --pd6: #18c1fc; --pl6: #007ca5; --pd7: #9babfd; --pl7: #545be9; }
-  91.67% { --pd0: #fe80c0; --pl0: #c22182; --pd1: #fe8d70; --pl1: #c93200; --pd2: #e4a409; --pl2: #946900; --pd3: #96c410; --pl3: #5f7e01; --pd4: #14cfa3; --pl4: #0d8568; --pd5: #14c5e5; --pl5: #0f7f94; --pd6: #84b2fd; --pl6: #1368e9; --pd7: #c896fe; --pl7: #8f43d1; }
-  100.0% { --pd0: #fd8a8c; --pl0: #d0183a; --pd1: #f8970e; --pl1: #a16004; --pd2: #b8b90c; --pl2: #767707; --pd3: #00d27a; --pl3: #08884d; --pd4: #0cc9d1; --pl4: #008287; --pd5: #61b9ff; --pl5: #0177bc; --pd6: #b0a2ff; --pl6: #754fe0; --pd7: #ff74e5; --pl7: #b52ca1; }
-}
+/* Psychedelic arrows: game.js steps every color slot around the hue wheel
+   (45° apart) a few times a second by setting the --pd and --pl colors on the board.
+   These are the starting colors. */
 .skin.th-psychedelic { --pd0: #fd8a8c; --pl0: #d0183a; --pd1: #f8970e; --pl1: #a16004; --pd2: #b8b90c; --pl2: #767707; --pd3: #00d27a; --pl3: #08884d; --pd4: #0cc9d1; --pl4: #008287; --pd5: #61b9ff; --pl5: #0177bc; --pd6: #b0a2ff; --pl6: #754fe0; --pd7: #ff74e5; --pl7: #b52ca1;
-  --d0: var(--pd0); --l0: var(--pl0); --d1: var(--pd1); --l1: var(--pl1); --d2: var(--pd2); --l2: var(--pl2); --d3: var(--pd3); --l3: var(--pl3); --d4: var(--pd4); --l4: var(--pl4); --d5: var(--pd5); --l5: var(--pl5); --d6: var(--pd6); --l6: var(--pl6); --d7: var(--pd7); --l7: var(--pl7);
-  animation: psychedelic 6s linear infinite; }
-.reduce-motion .skin.th-psychedelic, .skin.th-psychedelic.cvd { animation: none; }
-@media (prefers-reduced-motion: reduce) { .skin.th-psychedelic { animation: none; } }
+  --d0: var(--pd0); --l0: var(--pl0); --d1: var(--pd1); --l1: var(--pl1); --d2: var(--pd2); --l2: var(--pl2); --d3: var(--pd3); --l3: var(--pl3); --d4: var(--pd4); --l4: var(--pl4); --d5: var(--pd5); --l5: var(--pl5); --d6: var(--pd6); --l6: var(--pl6); --d7: var(--pd7); --l7: var(--pl7); }
 .skin { --a0: var(--d0); --a1: var(--d1); --a2: var(--d2); --a3: var(--d3); --a4: var(--d4); --a5: var(--d5); --a6: var(--d6); --a7: var(--d7); }
 .skin.tone-light { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .skin.tone-auto { --a0: var(--l0); --a1: var(--l1); --a2: var(--l2); --a3: var(--l3); --a4: var(--l4); --a5: var(--l5); --a6: var(--l6); --a7: var(--l7); } }

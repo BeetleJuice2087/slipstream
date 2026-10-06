@@ -483,6 +483,37 @@
     for (const el of document.querySelectorAll('.skin')) if (el.id) applySkin(el);
     if (typeof Game !== 'undefined' && Game.cubeView && Game.cubeView.p) Game.cubeView.refreshColors();
   }
+  /* PSYCHEDELIC — instead of a CSS animation (which recolors every arrow on
+     every frame and made flights stutter on phones), a light timer steps the
+     8 colors around the hue wheel ~8 times a second, and skips a board while
+     an arrow is flying on it. Colors come from a precomputed table. */
+  const PSY_STEPS = 48, PSY_MS = 6000;
+  let psyTable = null;
+  function psyColors() {
+    if (psyTable) return psyTable;
+    psyTable = [];
+    for (let k = 0; k < PSY_STEPS; k++) {
+      const row = {};
+      for (let i = 0; i < 8; i++) {
+        const H = (i * 45 + (k * 360) / PSY_STEPS + 20) % 360;
+        row['--pd' + i] = rgbToCss(fromOklch([0.76, 0.2, H]));
+        row['--pl' + i] = rgbToCss(fromOklch([0.55, 0.19, H]));
+      }
+      psyTable.push(row);
+    }
+    return psyTable;
+  }
+  setInterval(() => {
+    if (document.hidden || reducedMotion()) return;
+    const els = document.querySelectorAll('.skin.th-psychedelic:not(.cvd)');
+    if (!els.length) return;
+    const row = psyColors()[Math.floor(((performance.now() % PSY_MS) / PSY_MS) * PSY_STEPS)];
+    const busy = Game.flatView && Game.flatView.busy ? Game.flatView.svg : null;
+    for (const el of els) {
+      if (el === busy || !el.getBoundingClientRect().width) continue; // flying, or not on screen
+      for (const k in row) el.style.setProperty(k, row[k]);
+    }
+  }, PSY_MS / PSY_STEPS);
   function applySkin(svg, arrows, board, ignoreCvd) {
     const eq = Save.data.progress.equip;
     const b = styleItem('board', board || eq.board);
@@ -1340,14 +1371,23 @@
         this.spin.dx *= 0.92; this.spin.dy *= 0.92;
         if (Math.abs(this.spin.dx) + Math.abs(this.spin.dy) < 0.15) this.spin = null;
       }
-      const pulsing = (this.stuck && this.stuck.size > 0 && !reducedMotion()) || (this.psy && this.canvas.offsetParent !== null);
-      if (this.psy) {
-        const turn = ((now / 6000) % 1) * 360; // one full trip round the wheel every 6 s, like the flat board
-        this.col.arrows = this.psyBase.map(([L, C, H]) => fromOklch([L, C, (H + turn) % 360]));
-        this.outlineCol = this.col.arrows.map(this.outlineOf);
+      const pulsing = this.stuck && this.stuck.size > 0 && !reducedMotion();
+      const psyOn = this.psy && this.canvas.offsetParent !== null;
+      if (psyOn) {
+        // Same stepped hue turn as the flat board (~8 steps a second), so the
+        // cube only redraws when the colors actually change.
+        const step = Math.floor(((now % PSY_MS) / PSY_MS) * PSY_STEPS);
+        if (step !== this.psyStep) {
+          this.psyStep = step;
+          const turn = (step * 360) / PSY_STEPS;
+          this.col.arrows = this.psyBase.map(([L, C, H]) => fromOklch([L, C, (H + turn) % 360]));
+          this.outlineCol = this.col.arrows.map(this.outlineOf);
+          this.dirty = true;
+        }
       }
       if (this.dirty || pulsing || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.draw(now);
       if (pulsing || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.raf = requestAnimationFrame(this.loop);
+      else if (psyOn) { clearTimeout(this.psyTimer); this.psyTimer = setTimeout(() => this.kick(), PSY_MS / PSY_STEPS); }
     }
     rotate(dx, dy) {
       this.R = matMul(matMul(rotY(dx * 0.009), rotX(dy * 0.009)), this.R);
@@ -3770,7 +3810,7 @@
       acts.append(btn('Home', 'ghost-btn', () => showScreen('home')));
       acts.append(btn('See calendar', 'primary-btn', () => showScreen('daily')));
     } else if (sess.mode === 'zen') {
-      const dur = 2400;
+      const dur = 3000;
       const next = h('div', { class: 'zen-next' }, 'Next board in a moment', h('div', { class: 'bar' }, h('span', { style: `--dur:${dur}ms` })));
       $('#complete-note').after(next);
       acts.append(btn('Stop here', 'ghost-btn', () => { clearTimeout(zenTimer); showScreen('zen'); }));
@@ -4469,6 +4509,8 @@
 
   function boot() {
     Save.load();
+    // Leftovers from the removed History feature (Oct 2026 test build).
+    delete Save.data.history; delete Save.data.zenCleared;
     applyTheme();
     if (/debug/.test(location.hash)) Save.data.settings.dev = true;
     migrateStars();
