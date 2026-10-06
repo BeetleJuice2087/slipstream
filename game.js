@@ -487,7 +487,7 @@
      every frame and made flights stutter on phones), a light timer steps the
      8 colors around the hue wheel ~8 times a second, and skips a board while
      an arrow is flying on it. Colors come from a precomputed table. */
-  const PSY_STEPS = 48, PSY_MS = 6000;
+  const PSY_STEPS = 48, PSY_MS = 8000, PSY_MS_3D = 14000;
   let psyTable = null;
   function psyColors() {
     if (psyTable) return psyTable;
@@ -503,17 +503,29 @@
     }
     return psyTable;
   }
+  /* Recoloring cost grows with the number of arrows, so big boards step less
+     often (up to ~2 a second), and nothing changes for a moment after a tap
+     so the arrow you just released flies smoothly. */
+  let psyLastTap = 0, psyLastStep = 0;
+  document.addEventListener('pointerdown', () => { psyLastTap = performance.now(); }, true);
   setInterval(() => {
     if (document.hidden || reducedMotion()) return;
     const els = document.querySelectorAll('.skin.th-psychedelic:not(.cvd)');
     if (!els.length) return;
-    const row = psyColors()[Math.floor(((performance.now() % PSY_MS) / PSY_MS) * PSY_STEPS)];
-    const busy = Game.flatView && Game.flatView.busy ? Game.flatView.svg : null;
+    const now = performance.now();
+    const fv = Game.flatView, onBoard = fv && fv.svg && fv.svg.getBoundingClientRect().width > 0 && fv.svg.classList.contains('th-psychedelic');
+    if (onBoard) {
+      const n = Game.board ? Game.board.count : 0;
+      const gap = Math.min(500, 120 + n * 1.6);
+      if (fv.busy || now - psyLastTap < 700 || now - psyLastStep < gap) return;
+    }
+    psyLastStep = now;
+    const row = psyColors()[Math.floor(((now % PSY_MS) / PSY_MS) * PSY_STEPS)];
     for (const el of els) {
-      if (el === busy || !el.getBoundingClientRect().width) continue; // flying, or not on screen
+      if (!el.getBoundingClientRect().width) continue; // not on screen
       for (const k in row) el.style.setProperty(k, row[k]);
     }
-  }, PSY_MS / PSY_STEPS);
+  }, 120);
   function applySkin(svg, arrows, board, ignoreCvd) {
     const eq = Save.data.progress.equip;
     const b = styleItem('board', board || eq.board);
@@ -1376,7 +1388,7 @@
       if (psyOn) {
         // Same stepped hue turn as the flat board (~8 steps a second), so the
         // cube only redraws when the colors actually change.
-        const step = Math.floor(((now % PSY_MS) / PSY_MS) * PSY_STEPS);
+        const step = Math.floor(((now % PSY_MS_3D) / PSY_MS_3D) * PSY_STEPS);
         if (step !== this.psyStep) {
           this.psyStep = step;
           const turn = (step * 360) / PSY_STEPS;
@@ -1387,7 +1399,7 @@
       }
       if (this.dirty || pulsing || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.draw(now);
       if (pulsing || this.anims.size || this.flying.length || this.fx.length || this.spin || this.hintId >= 0 || this.flash.size) this.raf = requestAnimationFrame(this.loop);
-      else if (psyOn) { clearTimeout(this.psyTimer); this.psyTimer = setTimeout(() => this.kick(), PSY_MS / PSY_STEPS); }
+      else if (psyOn) { clearTimeout(this.psyTimer); this.psyTimer = setTimeout(() => this.kick(), PSY_MS_3D / PSY_STEPS); }
     }
     rotate(dx, dy) {
       this.R = matMul(matMul(rotY(dx * 0.009), rotX(dy * 0.009)), this.R);
