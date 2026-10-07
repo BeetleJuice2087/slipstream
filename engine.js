@@ -1289,7 +1289,22 @@
   /* ------------------------------------------------------------------
      Campaign, Daily, Zen seeding
      ------------------------------------------------------------------ */
+  /* Campaign layout (200 levels). Each tier starts with the levels it had in
+     the original 160-level campaign, in the same order and built from the
+     same seeds, so those boards never change; the extra levels follow at the
+     end of the tier. OLD_TIERS is the original layout, kept for that mapping
+     and for moving old saves to the new numbers. */
   const CAMPAIGN_TIERS = [
+    { diff: 'easy', from: 1, to: 40 },
+    { diff: 'medium', from: 41, to: 80 },
+    { diff: 'hard', from: 81, to: 110 },
+    { diff: 'expert', from: 111, to: 140 },
+    { diff: 'nightmare', from: 141, to: 160 },
+    { diff: 'insane', from: 161, to: 180 },
+    { diff: 'impossible', from: 181, to: 190 },
+    { diff: 'inconceivable', from: 191, to: 200 },
+  ];
+  const OLD_TIERS = [
     { diff: 'easy', from: 1, to: 30 },
     { diff: 'medium', from: 31, to: 70 },
     { diff: 'hard', from: 71, to: 100 },
@@ -1299,22 +1314,38 @@
     { diff: 'impossible', from: 141, to: 150 },
     { diff: 'inconceivable', from: 151, to: 160 },
   ];
-  const CAMPAIGN_LENGTH = 160;
+  const CAMPAIGN_LENGTH = 200;
+  const OLD_CAMPAIGN_LENGTH = 160;
   const GENERATOR_VERSION = 'v5'; // v2: fully covered boards · v3: mixed lengths, winding arrows · v4: random board outlines · v5: Perlin outlines
   // Seeds still use 'v3', so plain rectangular boards are exactly what they were.
   const SEED_VERSION = 'v3';
+  // From the Hard tier on, campaign boards get the same tightening as Zen.
+  const CAMPAIGN_TIGHT_FROM = 71; // in old level numbers (the start of Hard)
 
   function campaignLevelInfo(level) {
-    const tier = CAMPAIGN_TIERS.find((tr) => level >= tr.from && level <= tr.to) || CAMPAIGN_TIERS[CAMPAIGN_TIERS.length - 1];
-    const t = tier.to === tier.from ? 1 : (level - tier.from) / (tier.to - tier.from);
-    return { level, diff: tier.diff, t, seed: 'campaign|' + SEED_VERSION + '|' + level };
+    const i = Math.max(0, CAMPAIGN_TIERS.findIndex((tr) => level >= tr.from && level <= tr.to));
+    const tier = CAMPAIGN_TIERS[i], old = OLD_TIERS[i];
+    const idx = level - tier.from, oldCount = old.to - old.from + 1;
+    if (idx < oldCount) {
+      // One of the original levels: same seed and same spot in its tier as before.
+      const oldLevel = old.from + idx;
+      const t = old.to === old.from ? 1 : (oldLevel - old.from) / (old.to - old.from);
+      return { level, diff: tier.diff, t, seed: 'campaign|' + SEED_VERSION + '|' + oldLevel, tight: oldLevel >= CAMPAIGN_TIGHT_FROM, oldLevel };
+    }
+    // A new level at the end of the tier: the toughest end of the tier's range.
+    const extra = tier.to - tier.from + 1 - oldCount, k = idx - oldCount;
+    const t = 0.55 + 0.45 * (extra > 1 ? k / (extra - 1) : 1);
+    return { level, diff: tier.diff, t, seed: 'campaign|' + SEED_VERSION + '|n' + level, tight: tier.diff !== 'easy' && tier.diff !== 'medium' };
   }
-  // From the Hard tier on, campaign boards get the same tightening as Zen
-  // (Hard: fewer free arrows; Expert and up: also slightly bigger boards).
-  const CAMPAIGN_TIGHT_FROM = 71;
+  /** Where an original (160-level) level number sits in the new campaign. */
+  function newLevelFor(oldLevel) {
+    const i = OLD_TIERS.findIndex((tr) => oldLevel >= tr.from && oldLevel <= tr.to);
+    if (i < 0) return oldLevel;
+    return CAMPAIGN_TIERS[i].from + (oldLevel - OLD_TIERS[i].from);
+  }
   function campaignPuzzle(level) {
     const info = campaignLevelInfo(level);
-    return generate(Object.assign({}, info, { tight: level >= CAMPAIGN_TIGHT_FROM }));
+    return generate(info);
   }
 
   // Daily difficulty climbs through the week: Mon easy → weekend hard.
@@ -1336,7 +1367,7 @@
   const api = {
     RNG, hashString, DX, DY, DIR_NAMES, DIFFICULTIES, DIFFICULTY_ORDER,
     resolveParams, buildMask, corridor, BoardState, analyze, verifySolution,
-    generate, CAMPAIGN_TIERS, CAMPAIGN_LENGTH, CAMPAIGN_TIGHT_FROM, campaignLevelInfo, campaignPuzzle,
+    generate, CAMPAIGN_TIERS, OLD_TIERS, CAMPAIGN_LENGTH, OLD_CAMPAIGN_LENGTH, CAMPAIGN_TIGHT_FROM, campaignLevelInfo, campaignPuzzle, newLevelFor,
     dailyInfo, dailyPuzzle, zenPuzzle, DAILY_BY_WEEKDAY, PALETTE_SIZE, GENERATOR_VERSION, ZEN_TIGHT_VERSION, ZEN_TUNE, TIGHT_TRIES, TIGHT_FREE,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

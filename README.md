@@ -43,7 +43,7 @@ and it appears in Zen automatically.
   Inconceivable block shape (~124 arrows). Clearing an Inconceivable board in Zen earns the "Inconceivable!" achievement.
 - Saves that had already cleared level 150 get level 151 opened on load (`catchUpCampaign`).
 
-## Pictures
+## Shapes (formerly Pictures)
 - 32 hidden-picture boards (`pictures.js`): each is a simple silhouette (heart, fish, cat, anchor,
   guitar, lighthouse…) built from basic pieces and filled with arrows by the normal generator.
 - Clear one to reveal its name and add it to the gallery. Three are always open; each find unlocks
@@ -61,15 +61,19 @@ In Campaign, 3D bonus and Daily, Undo takes back your last blocked tap for 10 co
 
 Seasonal Shop items (`season` on a `STYLE` entry, months in `SEASONS`) appear in their own section at the top of the Shop only during their month, by the player's local date. Anything bought stays owned all year and then shows in the normal Shop sections. Halloween (October): Halloween arrow colors, Pumpkin / Witch / Haunted boards, and Pumpkins / Bats / Ghosts / Candy trails (little pictures from `ICONS`, drawn on both flat and 3D boards).
 
+## 200-level campaign layout
+
+`CAMPAIGN_TIERS` (engine.js) is the 200-level layout; `OLD_TIERS` is the original 160-level one. Each tier starts with its original levels in order, built from the same seeds (`campaign|v3|<old number>`) and the same position in the tier, so those boards are unchanged; the extra levels (seeds `campaign|v3|n<level>`) come at the end of each tier. Old saves are moved to the new numbers once on load (`catchUpCampaign`, flag `campaign.layout200`), including the board in progress. 3D bonus levels sit after every 10th level in `BONUS_SLOTS` order (cube.js); they're stored by id (17–20 were added with this layout) and shown by slot.
+
 ## Developer tools
 Settings → tap the version line five times → turn on Developer tools (or open with `#debug`).
 A Dev button appears in game: seed, board data, validate, show solution order, auto-solve,
 and a sandbox "Generate new seed" that never touches your stats.
 
 ## Difficulties and hearts
-Eight tiers: Easy, Medium, Hard, Expert, Nightmare, Insane, Impossible, Inconceivable. The campaign runs 160 levels
-(1-30 Easy, 31-70 Medium, 71-100 Hard, 101-115 Expert, 116-130 Nightmare, 131-140 Insane,
-141-150 Impossible, 151-160 Inconceivable); Zen offers all eight.
+Eight tiers: Easy, Medium, Hard, Expert, Nightmare, Insane, Impossible, Inconceivable. The campaign runs 200 levels
+(1-40 Easy, 41-80 Medium, 81-110 Hard, 111-140 Expert, 141-160 Nightmare, 161-180 Insane,
+181-190 Impossible, 191-200 Inconceivable); Zen offers all eight.
 Campaign and Daily give 3 hearts per attempt; each blocked tap costs one and the third ends the run.
 Zen has no heart limit.
 
