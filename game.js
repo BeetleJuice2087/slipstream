@@ -345,7 +345,17 @@
   /** Which generator built a board; a saved board from another version is dropped. */
   /* 3D bonus levels: bonus k unlocks when campaign level 10k is cleared.
      They are optional extras and never block the main campaign. */
-  const bonusAfter = (k) => k * SlipCube.BONUS_AFTER;
+  /* Bonus levels sit after every 10th level in BONUS_SLOTS order. A bonus is
+     stored and opened by its id; it's shown by its slot ("3D Bonus 5"). */
+  /** First open level not cleared yet (new levels can appear before your furthest one). */
+  const nextCampaignLevel = () => {
+    const c = Save.data.campaign;
+    for (let L = 1; L <= Math.min(c.unlocked, E.CAMPAIGN_LENGTH); L++) if (!(c.levels[L] && c.levels[L].completed)) return L;
+    return Math.min(c.unlocked, E.CAMPAIGN_LENGTH);
+  };
+  const bonusSlot = (k) => SlipCube.BONUS_SLOTS.indexOf(Number(k)) + 1;
+  const bonusAfter = (k) => bonusSlot(k) * SlipCube.BONUS_AFTER;
+  const bonusAt = (L) => (L % SlipCube.BONUS_AFTER === 0 ? SlipCube.BONUS_SLOTS[L / SlipCube.BONUS_AFTER - 1] || null : null);
   const bonusUnlocked = (k) => { const r = Save.data.campaign.levels[bonusAfter(k)]; return !!(r && r.completed); };
   const levelStore = (mode) => (mode === 'bonus' ? Save.data.campaign.bonus : Save.data.campaign.levels);
   const bonusDone = () => { const b = Save.data.campaign.bonus; let n = 0; for (const k in b) if (b[k].completed) n++; return n; };
@@ -353,6 +363,8 @@
   /* Pictures: picture k unlocks once you've found k-2 others, so three are always open. */
   const PIC = window.SlipPictures;
   const picDone = () => { const d = Save.data.pictures.done; let n = 0; for (const k in d) if (d[k].completed) n++; return n; };
+  /** A found shape shows its name; one not found yet stays a numbered mystery. */
+  const shapeName = (k) => { const r = Save.data.pictures.done[k]; return r && r.completed ? PIC.PICTURES[k].name : `Shape ${Number(k) + 1}`; };
   const picUnlocked = (k) => k < picDone() + 3 || !!(Save.data.pictures.done[k] && Save.data.pictures.done[k].completed);
   /** The picture's outline as one SVG path (for gallery tiles and the reveal).
       Uses the same size of mask as the puzzle board, so the picture shows
@@ -376,7 +388,7 @@
   }
   const genFor = (key, mode) => (mode === 'picture' ? E.GENERATOR_VERSION + '+' + E.ZEN_TIGHT_VERSION + '+' + PIC.PICTURE_VERSION : isCubeKey(key) ? E.GENERATOR_VERSION + '+' + SlipCube.CUBE_VERSION
     : (mode === 'zen' || mode === 'debug') ? E.GENERATOR_VERSION + '+' + E.ZEN_TIGHT_VERSION
-    : (mode === 'campaign' && Number(key) >= E.CAMPAIGN_TIGHT_FROM) ? E.GENERATOR_VERSION + '+c' + E.ZEN_TIGHT_VERSION
+    : (mode === 'campaign' && E.campaignLevelInfo(Number(key)).tight) ? E.GENERATOR_VERSION + '+c' + E.ZEN_TIGHT_VERSION
     : E.GENERATOR_VERSION);
   function puzzleFor(sess) {
     const key = `${sess.mode}|${sess.key}|${sess.diff}`;
@@ -506,21 +518,25 @@
   /* Recoloring cost grows with the number of arrows, so big boards step less
      often (up to ~2 a second), and nothing changes for a moment after a tap
      so the arrow you just released flies smoothly. */
-  let psyLastTap = 0, psyLastStep = 0;
+  // psyClock only moves forward while colors are allowed to change, so a
+  // pause (tapping, flying arrows) picks up exactly where it stopped.
+  let psyLastTap = 0, psyLastStep = 0, psyLastTick = performance.now(), psyClock = 0;
   document.addEventListener('pointerdown', () => { psyLastTap = performance.now(); }, true);
   setInterval(() => {
+    const now = performance.now(), dt = Math.min(500, now - psyLastTick);
+    psyLastTick = now;
     if (document.hidden || reducedMotion()) return;
     const els = document.querySelectorAll('.skin.th-psychedelic:not(.cvd)');
     if (!els.length) return;
-    const now = performance.now();
     const fv = Game.flatView, onBoard = fv && fv.svg && fv.svg.getBoundingClientRect().width > 0 && fv.svg.classList.contains('th-psychedelic');
+    if (onBoard && (fv.busy || now - psyLastTap < 700)) return; // paused: the clock doesn't move
+    psyClock += dt;
     if (onBoard) {
       const n = Game.board ? Game.board.count : 0;
-      const gap = Math.min(500, 120 + n * 1.6);
-      if (fv.busy || now - psyLastTap < 700 || now - psyLastStep < gap) return;
+      if (now - psyLastStep < Math.min(500, 120 + n * 1.6)) return; // big boards repaint less often
     }
     psyLastStep = now;
-    const row = psyColors()[Math.floor(((now % PSY_MS) / PSY_MS) * PSY_STEPS)];
+    const row = psyColors()[Math.floor(((psyClock % PSY_MS) / PSY_MS) * PSY_STEPS)];
     for (const el of els) {
       if (!el.getBoundingClientRect().width) continue; // not on screen
       for (const k in row) el.style.setProperty(k, row[k]);
@@ -589,6 +605,8 @@
   const iconTurn = (ic) => ({ rot0: (Math.random() * 2 - 1) * ic.tilt, spin: (Math.random() < 0.5 ? -1 : 1) * ic.spin * (0.5 + Math.random() * 0.5) });
   const iconFill = (ic) => ic.fill || CANDY_COLORS[Math.floor(Math.random() * CANDY_COLORS.length)];
   const iconPath2D = {};
+  let heartP2D = null;
+  const HEART_P2D = () => heartP2D || (heartP2D = new Path2D('M0 0.35C-0.5 0 -0.55 -0.35 -0.3 -0.45C-0.12 -0.52 0 -0.38 0 -0.28C0 -0.38 0.12 -0.52 0.3 -0.45C0.55 -0.35 0.5 0 0 0.35Z'));
   const getPath2D = (name) => iconPath2D[name] || (iconPath2D[name] = new Path2D(ICONS[name].d));
   const HEART_PINK = '#ff5c8a', GOLD = '#e8b030', GOLD_LIGHT = '#fff1b8';
   const RAINBOW = [0, 1, 2, 3, 4, 6]; // palette slots: red, orange, yellow-green, teal, blue, purple
@@ -623,6 +641,8 @@
       this.p = puzzle;
       this.board = board;
       this.anims.clear();
+      this.specks = []; this.speckRunning = null;
+      if (this.speckCanvas) { const c = this.speckCanvas; c.getContext('2d').clearRect(0, 0, c.width, c.height); }
       for (const g of [this.gGrid, this.gUnder, this.gArrows, this.gFx, this.gLabels]) g.textContent = '';
       this.nodes.clear();
       this.selected = -1;
@@ -753,6 +773,18 @@
         if (!keep) this.anims.delete(fn);
       }
       this.raf = this.anims.size ? requestAnimationFrame(this.loop) : 0;
+      if (!this.raf) this.flushPaint();
+    }
+    /** Some browsers (seen in Safari) leave thin streaks behind where SVG
+        shapes moved. When an animation finishes, repaint the whole board once
+        by nudging its opacity for a single frame, which wipes any leftovers. */
+    flushPaint(delay) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = setTimeout(() => {
+        const svg = this.svg;
+        svg.style.opacity = '0.999';
+        requestAnimationFrame(() => requestAnimationFrame(() => { svg.style.opacity = ''; }));
+      }, delay || 30);
     }
     get busy() { return this.anims.size > 0; }
 
@@ -843,29 +875,17 @@
         c.style.fill = 'none'; c.style.stroke = `var(--a${color % 8})`; c.style.strokeWidth = '0.035';
         life = 650 + Math.random() * 300; rise = 0.55; grow = 0.6;
       } else if (kind === 'icon') {
-        const ic = ICONS[iconName], k = 0.75 + Math.random() * 0.2, turn = iconTurn(ic), rot0 = turn.rot0;
-        c = s('path', { d: ic.d, 'fill-rule': ic.evenodd ? 'evenodd' : 'nonzero' });
-        c.style.fill = iconFill(ic); c.style.stroke = ic.stroke; c.style.strokeWidth = '0.06'; c.style.strokeLinejoin = 'round';
-        life = 750 + Math.random() * 300; rise = ic.rise;
-        const dx = (Math.random() - 0.5) * 0.5;
-        c.setAttribute('transform', `translate(${x} ${y}) rotate(${rot0}) scale(${k})`);
-        this.gFx.append(c);
-        const start0 = performance.now();
-        this.addAnim((now) => {
-          const t = (now - start0) / life;
-          const sy = ic.flap ? 0.6 + 0.4 * Math.abs(Math.cos(t * 18)) : 1;
-          c.style.opacity = String(Math.max(0, 1 - t));
-          c.setAttribute('transform', `translate(${x + dx * t} ${y - rise * t}) rotate(${rot0 + turn.spin * t}) scale(${k} ${k * sy})`);
-          if (t >= 1) { c.remove(); return false; }
-          return true;
-        });
+        // Drawn on a canvas laid over the board (see speckLayer): spinning,
+        // scaling SVG shapes could leave paint streaks behind on some phones.
+        const ic = ICONS[iconName], turn = iconTurn(ic);
+        this.addSpeck({ x, y, k: 0.75 + Math.random() * 0.2, rot0: turn.rot0, spin: turn.spin, rise: ic.rise, dx: (Math.random() - 0.5) * 0.5,
+          life: 750 + Math.random() * 300, path: getPath2D(iconName), fill: iconFill(ic), stroke: ic.stroke, evenodd: !!ic.evenodd, flap: !!ic.flap });
         return;
       } else if (kind === 'heart') {
-        const k = 0.17 + Math.random() * 0.07;
-        c = s('path', { d: 'M0 0.35C-0.5 0 -0.55 -0.35 -0.3 -0.45C-0.12 -0.52 0 -0.38 0 -0.28C0 -0.38 0.12 -0.52 0.3 -0.45C0.55 -0.35 0.5 0 0 0.35Z' });
-        c.style.fill = Math.random() < 0.5 ? HEART_PINK : `var(--a${color % 8})`;
-        c.dataset.k = k; life = 700 + Math.random() * 300; rise = 0.45;
-        c.setAttribute('transform', `translate(${x} ${y}) scale(${k * 2})`);
+        const hc = Math.random() < 0.5 ? HEART_PINK : getComputedStyle(this.svg).getPropertyValue('--a' + (color % 8)).trim();
+        this.addSpeck({ x, y, k: (0.17 + Math.random() * 0.07) * 2, rot0: (Math.random() * 2 - 1) * 20, spin: 0, rise: 0.45, dx: 0,
+          life: 700 + Math.random() * 300, path: HEART_P2D(), fill: hc, stroke: null, evenodd: false, flap: false, grow: 0.2 });
+        return;
       } else {
         c = s('circle', { r: 0.045 + Math.random() * 0.05, cx: x, cy: y });
         c.style.fill = kind === 'gold' ? (Math.random() < 0.4 ? GOLD_LIGHT : GOLD)
@@ -876,11 +896,59 @@
       this.addAnim((now) => {
         const t = (now - start) / life;
         c.style.opacity = String(Math.max(0, 1 - t));
-        if (kind === 'heart') c.setAttribute('transform', `translate(${x} ${y - rise * t}) scale(${c.dataset.k * 2 * (1 + 0.2 * t)})`);
-        else if (rise) { c.setAttribute('cy', y - rise * t); c.setAttribute('r', r0 * (1 + grow * t)); }
+        if (rise) { c.setAttribute('cy', y - rise * t); c.setAttribute('r', r0 * (1 + grow * t)); }
         if (t >= 1) { c.remove(); return false; }
         return true;
       });
+    }
+
+    /** Canvas over the board for trail pictures; cleared and redrawn every
+        frame while any are alive, so nothing can be left behind. */
+    speckLayer() {
+      if (this.speckCanvas && this.speckCanvas.isConnected) return this.speckCanvas;
+      const cv = document.createElement('canvas');
+      cv.className = 'speck-layer';
+      cv.setAttribute('aria-hidden', 'true');
+      const host = this.svg.parentNode;
+      if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+      host.append(cv);
+      this.speckCanvas = cv;
+      this.specks = [];
+      return cv;
+    }
+    addSpeck(sp) {
+      this.speckLayer();
+      sp.start = performance.now();
+      this.specks.push(sp);
+      if (this.speckRunning && this.anims.has(this.speckRunning)) return;
+      this.speckRunning = (now) => { const more = this.drawSpecks(now); if (!more) this.speckRunning = null; return more; };
+      this.addAnim(this.speckRunning);
+    }
+    drawSpecks(now) {
+      const cv = this.speckCanvas, ctx = cv.getContext('2d');
+      const wrap = cv.parentNode.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      const W = Math.round(wrap.width * dpr), H = Math.round(wrap.height * dpr);
+      if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; } else ctx.clearRect(0, 0, W, H);
+      const m = this.svg.getScreenCTM();
+      this.specks = this.specks.filter((sp) => now - sp.start < sp.life);
+      if (!m || !this.specks.length) { ctx.clearRect(0, 0, W, H); this.specks = []; return false; }
+      for (const sp of this.specks) {
+        const t = (now - sp.start) / sp.life;
+        const bx = sp.x + sp.dx * t, by = sp.y - sp.rise * t;
+        const sx = (m.a * bx + m.c * by + m.e - wrap.left) * dpr, sy = (m.b * bx + m.d * by + m.f - wrap.top) * dpr;
+        const unit = Math.hypot(m.a, m.b) * dpr;
+        const k = sp.k * (1 + (sp.grow || 0) * t), fy = sp.flap ? 0.6 + 0.4 * Math.abs(Math.cos(t * 18)) : 1;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = Math.max(0, 1 - t);
+        ctx.translate(sx, sy);
+        ctx.rotate(((sp.rot0 + sp.spin * t) * Math.PI) / 180);
+        ctx.scale(unit * k, unit * k * fy);
+        ctx.fillStyle = sp.fill;
+        ctx.fill(sp.path, sp.evenodd ? 'evenodd' : 'nonzero');
+        if (sp.stroke) { ctx.lineWidth = 0.06; ctx.lineJoin = 'round'; ctx.strokeStyle = sp.stroke; ctx.stroke(sp.path); }
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1;
+      return true;
     }
 
     burst(x, y, dir, color, big) {
@@ -924,7 +992,7 @@
       if (bnode) {
         bnode.g.classList.remove('is-blocker'); // re-adding next frame restarts the CSS animation
         requestAnimationFrame(() => bnode.g.classList.add('is-blocker'));
-        setTimeout(() => bnode.g.classList.remove('is-blocker'), 650);
+        setTimeout(() => { bnode.g.classList.remove('is-blocker'); this.flushPaint(); }, 650);
       }
       const start = performance.now();
       const moving = !reducedMotion();
@@ -2204,12 +2272,12 @@
       chip.className = 'diff-chip diff-' + sess.diff;
       let mode = '', name = '';
       if (sess.mode === 'campaign') { mode = 'Campaign'; name = 'Level ' + sess.key; }
-      else if (sess.mode === 'bonus') { mode = 'Campaign · 3D bonus'; name = 'Bonus ' + sess.key; }
+      else if (sess.mode === 'bonus') { mode = '3D bonus'; name = 'Bonus ' + bonusSlot(sess.key); }
       else if (sess.mode === 'picture') {
         const k = Number(sess.key), rec = Save.data.pictures.done[k];
-        mode = 'Pictures'; name = rec && rec.completed ? PIC.PICTURES[k].name : `Picture ${k + 1}`; // a mystery until found
+        mode = 'Shapes'; name = shapeName(k); // a mystery until found
       }
-      else if (sess.mode === 'daily') { mode = 'Daily Puzzle'; name = shortDate(sess.key); }
+      else if (sess.mode === 'daily') { mode = 'Daily'; name = shortDate(sess.key); }
       else if (sess.mode === 'zen') { mode = isCubeKey(sess.key) ? 'Zen · 3D' : 'Zen'; name = 'Board ' + ((Save.data.zen.session.count || 0) + 1); }
       else if (sess.mode === 'timed') { mode = 'Time Attack'; name = 'Board ' + ((this.run ? this.run.boards : 0) + 1); }
       else { mode = isCubeKey(sess.key) ? 'Sandbox 3D · not counted' : 'Sandbox · not counted'; name = 'Seed ' + (isCubeKey(sess.key) ? String(sess.key).slice(3) : sess.key); }
@@ -2676,6 +2744,19 @@
       who had already cleared the old last level get the next one opened. */
   function catchUpCampaign() {
     const c = Save.data.campaign;
+    /* 200-level campaign: move saves made with the original 160 levels to the
+       new numbers (each old level keeps its board; new levels were added at
+       the end of each tier). */
+    if (!c.layout200) {
+      c.layout200 = true;
+      const moved = {};
+      for (const k in c.levels) moved[E.newLevelFor(Number(k))] = c.levels[k];
+      c.levels = moved;
+      const oldU = Math.max(1, Math.min(E.OLD_CAMPAIGN_LENGTH, Number(c.unlocked) || 1));
+      c.unlocked = E.newLevelFor(oldU);
+      const act = Save.data.active;
+      if (act && act.mode === 'campaign') act.key = String(E.newLevelFor(Number(act.key)));
+    }
     while (c.unlocked < E.CAMPAIGN_LENGTH && c.levels[c.unlocked] && c.levels[c.unlocked].completed) c.unlocked++;
   }
   function migrateProgress() {
@@ -2712,9 +2793,9 @@
       progress: () => [Math.min(7, Save.data.progress.login.best || 0), 7] },
     { id: 'inconceivable', name: 'Inconceivable!', desc: 'Clear an Inconceivable board in Zen', coins: 200,
       progress: () => [Math.min(1, Save.data.zen.boards.inconceivable || 0), 1] },
-    { id: 'pictures-10', name: 'Art collector', desc: 'Find 10 pictures', coins: 100,
+    { id: 'pictures-10', name: 'Shape collector', desc: 'Find 10 shapes', coins: 100,
       progress: () => [Math.min(10, picDone()), 10] },
-    { id: 'pictures-all', name: 'Full gallery', desc: `Find all ${window.SlipPictures.PICTURES.length} pictures`, coins: 300,
+    { id: 'pictures-all', name: 'Full gallery', desc: `Find all ${window.SlipPictures.PICTURES.length} shapes`, coins: 300,
       progress: () => [picDone(), window.SlipPictures.PICTURES.length] },
     { id: 'bonus-first', name: 'Third dimension', desc: 'Clear your first 3D bonus level', coins: 50,
       progress: () => [Math.min(1, bonusDone()), 1] },
@@ -2790,7 +2871,7 @@
         res.notes.push(`Level ${L + 1} unlocked`);
       }
       if (L === E.CAMPAIGN_LENGTH) res.notes.push('That was the final level. Campaign complete!');
-      if (L % SlipCube.BONUS_AFTER === 0 && L / SlipCube.BONUS_AFTER <= SlipCube.BONUS_COUNT && !rec.bonusNoted) {
+      if (bonusAt(L) && !rec.bonusNoted) {
         rec.bonusNoted = true;
         res.notes.push(`3D Bonus ${L / SlipCube.BONUS_AFTER} unlocked`);
       }
@@ -2800,14 +2881,14 @@
       const rec = Object.assign({ plays: 1 }, pd[k]);
       res.replay = !!rec.completed;
       res.firstFind = !rec.completed;
-      if (rec.bestTime == null || sess.elapsed < rec.bestTime) { if (rec.completed) res.notes.push('New best time for this picture'); rec.bestTime = sess.elapsed; }
+      if (rec.bestTime == null || sess.elapsed < rec.bestTime) { if (rec.completed) res.notes.push('New best time for this shape'); rec.bestTime = sess.elapsed; }
       rec.completed = true;
       rec.perfect = !!rec.perfect || perfect;
       if (rec.stars && res.stars > rec.stars) res.notes.push(`New best: ${res.stars} stars`);
       rec.stars = Math.max(rec.stars || 0, res.stars);
       rec.clears = (rec.clears || 0) + 1;
       pd[k] = rec;
-      if (res.firstFind) res.notes.push(`${picDone()} of ${PIC.PICTURES.length} pictures found`);
+      if (res.firstFind) res.notes.push(`${picDone()} of ${PIC.PICTURES.length} shapes found`);
     } else if (sess.mode === 'bonus') {
       const k = Number(sess.key);
       const bl = Save.data.campaign.bonus;
@@ -2966,8 +3047,8 @@
       cont.hidden = false;
       let title = '';
       if (act.mode === 'campaign') title = `Level ${act.key} · ${diffLabel(act.diff)}`;
-      else if (act.mode === 'bonus') title = `3D Bonus ${act.key} · ${diffLabel(act.diff)}`;
-      else if (act.mode === 'picture') title = `Picture ${Number(act.key) + 1} · ${diffLabel(act.diff)}`;
+      else if (act.mode === 'bonus') title = `3D Bonus ${bonusSlot(act.key)} · ${diffLabel(act.diff)}`;
+      else if (act.mode === 'picture') title = `${shapeName(Number(act.key))} · ${diffLabel(act.diff)}`;
       else if (act.mode === 'daily') title = act.key === dateKey() ? `Today's Daily · ${diffLabel(act.diff)}` : `Daily ${shortDate(act.key)}`;
       else title = `Zen · ${diffLabel(act.diff)}`;
       $('#home-continue-title').textContent = title;
@@ -2978,12 +3059,12 @@
     const lv = Save.data.campaign.levels;
     const done = Object.keys(lv).filter((k) => lv[k].completed).length;
     const un = Save.data.campaign.unlocked;
-    $('#home-campaign-sub').textContent = done ? `${done} cleared · ★ ${campaignStars()} · next up: Level ${Math.min(un, E.CAMPAIGN_LENGTH)}` : `${E.CAMPAIGN_LENGTH} levels · Easy to ${diffLabel(E.CAMPAIGN_TIERS[E.CAMPAIGN_TIERS.length - 1].diff)}`;
+    $('#home-campaign-sub').textContent = done ? `${done} cleared · ★ ${campaignStars()} · next up: Level ${nextCampaignLevel()}` : `${E.CAMPAIGN_LENGTH} levels · Easy to ${diffLabel(E.CAMPAIGN_TIERS[E.CAMPAIGN_TIERS.length - 1].diff)}`;
     $('#home-campaign-bar').style.width = `${pct(done, E.CAMPAIGN_LENGTH)}%`;
     const pf = picDone(), pn = PIC.PICTURES.length;
     const tb = timedBestAny();
     $('#home-timed-sub').textContent = tb ? `3 minutes · best ${tb} board${tb === 1 ? '' : 's'}` : 'Clear as many boards as you can in 3 minutes';
-    $('#home-pictures-sub').textContent = pf ? `${pf} of ${pn} pictures found` : `${pn} hidden pictures to find`;
+    $('#home-pictures-sub').textContent = pf ? `${pf} of ${pn} shapes found` : `${pn} hidden shapes to find`;
     $('#home-pictures-bar').style.width = `${pct(pf, pn)}%`;
 
     const today = dateKey();
@@ -3179,7 +3260,7 @@
       const cls = ['pic-tile', 'tier-' + L.diff];
       if (rec.completed) cls.push('is-done'); else if (open) cls.push('is-open'); else cls.push('is-locked');
       if (open && !rec.completed && next == null) { next = k; cls.push('is-next'); }
-      const label = rec.completed ? `${PIC.PICTURES[k].name}, ${rec.stars || 1} of 3 stars` : open ? `Picture ${k + 1}, a mystery. ${diffLabel(L.diff)}` : `Picture ${k + 1}, locked`;
+      const label = rec.completed ? `${PIC.PICTURES[k].name}, ${rec.stars || 1} of 3 stars` : open ? `Shape ${k + 1}, a mystery. ${diffLabel(L.diff)}` : `Shape ${k + 1}, locked`;
       const tile = h('button', { class: cls.join(' '), type: 'button', disabled: !open, 'aria-label': label, 'data-pic': k });
       if (rec.completed) {
         tile.innerHTML = picSvg(k, 'pic-art');
@@ -3206,6 +3287,7 @@
     wrap.textContent = '';
     const lv = Save.data.campaign.levels;
     const unlocked = Save.data.campaign.unlocked;
+    const nextL = nextCampaignLevel();
     let total = 0;
     for (const tier of E.CAMPAIGN_TIERS) {
       const grid = h('div', { class: 'level-grid' });
@@ -3217,7 +3299,7 @@
         const cls = ['level', 'tier-' + tier.diff];
         if (rec.completed) cls.push('is-done');
         if (rec.perfect) cls.push('is-perfect');
-        if (L === unlocked && !rec.completed) cls.push('is-next');
+        if (L === nextL && !rec.completed) cls.push('is-next');
         const label = locked ? `Level ${L}, locked`
           : `Level ${L}, ${diffLabel(tier.diff)}${rec.completed ? `, ${rec.stars || 1} of 3 stars` : ''}${rec.bestTime != null ? ', best time ' + fmtTime(rec.bestTime) : ''}`;
         const btn = h('button', { class: cls.join(' '), type: 'button', disabled: locked, 'aria-label': label, 'data-level': L,
@@ -3226,7 +3308,7 @@
           rec.completed ? starIcons(rec.stars || 1, 'tiny') : null);
         tierStars += rec.stars || 0;
         grid.append(btn);
-        if (L % SlipCube.BONUS_AFTER === 0 && L / SlipCube.BONUS_AFTER <= SlipCube.BONUS_COUNT) grid.append(bonusTile(L / SlipCube.BONUS_AFTER));
+        if (bonusAt(L)) grid.append(bonusTile(bonusAt(L)));
       }
       total += done;
       const count = tier.to - tier.from + 1;
@@ -3243,16 +3325,16 @@
   /** A 3D bonus tile, shown right after every 10th level. */
   function bonusTile(k) {
     const rec = Save.data.campaign.bonus[k] || {};
-    const locked = !bonusUnlocked(k);
+    const locked = !bonusUnlocked(k) && !rec.completed; // finished bonuses stay open even if they moved
     const diff = SlipCube.bonusCube(k).diff;
     const cls = ['level', 'level-bonus', 'tier-' + diff];
     if (rec.completed) cls.push('is-done');
     if (rec.perfect) cls.push('is-perfect');
     if (!locked && !rec.completed) cls.push('is-new');
-    const label = locked ? `3D bonus ${k}, unlocks after level ${bonusAfter(k)}`
-      : `3D bonus ${k}, ${diffLabel(diff)}${rec.completed ? `, ${rec.stars || 1} of 3 stars` : ''}`;
+    const label = locked ? `3D bonus ${bonusSlot(k)}, unlocks after level ${bonusAfter(k)}`
+      : `3D bonus ${bonusSlot(k)}, ${diffLabel(diff)}${rec.completed ? `, ${rec.stars || 1} of 3 stars` : ''}`;
     return h('button', { class: cls.join(' '), type: 'button', disabled: locked, 'aria-label': label, 'data-bonus': k,
-      title: locked ? `Clear level ${bonusAfter(k)} to unlock` : `3D bonus ${k}` },
+      title: locked ? `Clear level ${bonusAfter(k)} to unlock` : `3D bonus ${bonusSlot(k)}` },
       h('span', { class: 'level-num', html: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z M4 7.5l8 4.5 8-4.5 M12 12v9"/></svg>' }),
       rec.completed ? starIcons(rec.stars || 1, 'tiny') : h('span', { class: 'bonus-tag', text: '3D' }));
   }
@@ -3574,7 +3656,7 @@
         row('Campaign perfect clears', `${perfectCamp.n}`),
         row('Campaign stars', `★ ${campaignStars()} / ${E.CAMPAIGN_LENGTH * 3}`),
         row('3D bonus levels completed', `${bonusDone()} / ${SlipCube.BONUS_COUNT}`),
-        row('Pictures found', `${picDone()} / ${PIC.PICTURES.length}`))));
+        row('Shapes found', `${picDone()} / ${PIC.PICTURES.length}`))));
 
     body.append(section('Daily', h('div', { class: 'stat-rows' },
       row('Daily puzzles attempted', fmtNum(tot.attempted)),
@@ -3746,8 +3828,8 @@
     sheet.classList.toggle('is-perfect', res.perfect);
     let kicker = '';
     if (sess.mode === 'campaign') kicker = `Level ${sess.key} · ${diffLabel(sess.diff)}`;
-    else if (sess.mode === 'bonus') kicker = `3D Bonus ${sess.key} · ${diffLabel(sess.diff)}`;
-    else if (sess.mode === 'picture') kicker = `Picture ${Number(sess.key) + 1} · ${diffLabel(sess.diff)}`;
+    else if (sess.mode === 'bonus') kicker = `3D Bonus ${bonusSlot(sess.key)} · ${diffLabel(sess.diff)}`;
+    else if (sess.mode === 'picture') kicker = `${shapeName(Number(sess.key))} · ${diffLabel(sess.diff)}`;
     else if (sess.mode === 'daily') kicker = `Daily · ${shortDate(sess.key)}`;
     else if (sess.mode === 'zen') kicker = `Zen${isCubeKey(sess.key) ? ' 3D' : ''} · ${diffLabel(sess.diff)}`;
     else kicker = 'Sandbox';
@@ -3801,8 +3883,8 @@
     }
     if (sess.mode === 'campaign') {
       const L = Number(sess.key);
-      const bk = L / SlipCube.BONUS_AFTER;
-      if (Number.isInteger(bk) && bk <= SlipCube.BONUS_COUNT && !(Save.data.campaign.bonus[bk] || {}).completed)
+      const bk = bonusAt(L);
+      if (bk && !(Save.data.campaign.bonus[bk] || {}).completed)
         acts.append(btn('Play 3D bonus', 'ghost-btn bonus-btn', () => { ov.hidden = true; Game.open('bonus', bk); }));
       else acts.append(btn('All levels', 'ghost-btn', () => showScreen('campaign')));
       if (L < E.CAMPAIGN_LENGTH) acts.append(btn(`Level ${L + 1} →`, 'primary-btn', () => { ov.hidden = true; Game.open('campaign', L + 1); }));
@@ -3810,7 +3892,7 @@
     } else if (sess.mode === 'picture') {
       const next = Number(sess.key) + 1;
       acts.append(btn('Gallery', 'ghost-btn', () => showScreen('pictures')));
-      if (next < PIC.PICTURES.length && picUnlocked(next)) acts.append(btn(`Picture ${next + 1} →`, 'primary-btn', () => { ov.hidden = true; Game.open('picture', next); }));
+      if (next < PIC.PICTURES.length && picUnlocked(next)) acts.append(btn(`${shapeName(next)} →`, 'primary-btn', () => { ov.hidden = true; Game.open('picture', next); }));
       else acts.append(btn('Gallery', 'primary-btn', () => showScreen('pictures')));
     } else if (sess.mode === 'bonus') {
       // Back to the main path: the level after the one this bonus follows.
@@ -3868,7 +3950,7 @@
     sheet.classList.add('is-failed');
     $('#complete-stars').hidden = true;
     $('.burst', ov).textContent = '';
-    $('#complete-kicker').textContent = sess.mode === 'campaign' ? `Level ${sess.key} · ${diffLabel(sess.diff)}` : sess.mode === 'bonus' ? `3D Bonus ${sess.key} · ${diffLabel(sess.diff)}` : `Daily · ${shortDate(sess.key)}`;
+    $('#complete-kicker').textContent = sess.mode === 'campaign' ? `Level ${sess.key} · ${diffLabel(sess.diff)}` : sess.mode === 'bonus' ? `3D Bonus ${bonusSlot(sess.key)} · ${diffLabel(sess.diff)}` : `Daily · ${shortDate(sess.key)}`;
     $('#complete-title').textContent = 'Out of hearts';
     $('#complete-note').textContent = 'Three blocked taps ends the run. The board resets when you try again.';
     const stats = $('#complete-stats');
