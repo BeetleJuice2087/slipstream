@@ -1072,6 +1072,8 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
   --l0: #ff0289; --l1: #53005f; --l2: #8a79ff; --l3: #99032c; --l4: #1600b1; --l5: #b66b5c; --l6: #635594; --l7: #b300c6; }
 .skin.th-aurora { --d0: #49f09e; --d1: #03caaf; --d2: #58b4f5; --d3: #a594ff; --d4: #cf5cf5; --d5: #c8ffe9; --d6: #7fe6ff; --d7: #ff7ad9;
   --l0: #059a5e; --l1: #06775d; --l2: #076892; --l3: #514aab; --l4: #64257c; --l5: #1e3a7a; --l6: #018eb4; --l7: #b0258f; }
+.skin.th-harvest { --d0: #ff8c1a; --d1: #ffd166; --d2: #ff4d6d; --d3: #a7c957; --d4: #f4e3c1; --d5: #d9905a; --d6: #c49bff; --d7: #ff9e7a;
+  --l0: #c2410c; --l1: #8f6400; --l2: #a1122e; --l3: #4d6b12; --l4: #5e4434; --l5: #8b4513; --l6: #5b2a86; --l7: #c2185b; }
 .skin.th-halloween { --d0: #f78302; --d1: #cc90ff; --d2: #f3edd6; --d3: #7be04a; --d4: #ffc93c; --d5: #fe3854; --d6: #ed43ca; --d7: #b6bfd3;
   --l0: #e34300; --l1: #5224a4; --l2: #1a1a1a; --l3: #218d2b; --l4: #8f6200; --l5: #a40014; --l6: #9e1c89; --l7: #505b73; }
 /* Psychedelic arrows: game.js steps every color slot around the hue wheel
@@ -1096,6 +1098,9 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
 .skin.bg-pumpkin { --board: #d9650f; --dot: #8f3c00; --line: #c25808; --stuck: #ffffff; }
 .skin.bg-witch { --board: #3d1a5c; --dot: #8a5cb8; --line: #522675; }
 .skin.bg-haunted { --board: #0b0a0e; --dot: #4a4458; --line: #1e1b26; }
+.skin.bg-cranberry { --board: #5a0f22; --dot: #a64a5e; --line: #701a30; --stuck: #ffe066; }
+.skin.bg-hayloft { --board: #f3d98c; --dot: #b8913a; --line: #e5c46c; }
+.skin.bg-pecan { --board: #8b5a2b; --dot: #5a3714; --line: #7a4d22; --stuck: #ffe066; }
 
 /* ---------------- Level, XP and coins ---------------- */
 .coin { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -1173,6 +1178,7 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
 .style-holiday h3 { display: flex; align-items: center; gap: 10px; font-size: 1.15rem; }
 .holiday-until { margin-left: auto; font-family: var(--font-body); font-size: 0.78rem; font-weight: 800; color: var(--hol, var(--accent)); }
 .holiday-halloween { --hol: #f07a12; }
+.holiday-thanksgiving { --hol: #b5651d; }
 .style-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   min-height: 40px; border-radius: 999px; font-weight: 700; cursor: pointer;
@@ -1304,6 +1310,13 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
 .gift-pips i:last-child { width: 13px; height: 13px; margin-top: -2px; }
 .gift-pips i.is-got { background: color-mix(in srgb, var(--accent) 55%, var(--line)); }
 .gift-pips i.is-today { background: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 30%, transparent); }
+.news-sheet { text-align: center; padding: 30px 24px 22px; width: min(360px, 100%); }
+.news-emoji { font-size: 3.4rem; line-height: 1; margin: 0 auto 12px; animation: news-pop 0.5s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes news-pop { from { transform: scale(0.4) rotate(-12deg); opacity: 0; } to { transform: none; opacity: 1; } }
+.sheet h2.news-title { margin: 0 0 8px; font-size: 1.6rem; }
+.news-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+.news-later { width: 100%; padding-block: 12px; }
+.reduce-motion .news-emoji { animation: none; }
 .gift-ok { width: 100%; padding-block: 15px; font-size: 1.05rem; letter-spacing: 0.04em; }
 .coin-pill.is-bump { animation: giftPop 0.5s cubic-bezier(.3,1.6,.5,1); }
 @keyframes giftPop { 0% { transform: scale(0.8); } 60% { transform: scale(1.15); } 100% { transform: scale(1); } }

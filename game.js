@@ -87,6 +87,7 @@
         owned: { arrows: ['classic'], board: ['default'], trail: ['classic'] },
         equip: { arrows: 'classic', board: 'default', trail: 'classic' },
         login: { last: null, streak: 0, best: 0 }, // daily coins
+        seenSeasons: [], // holiday Shop pop-ups already shown, e.g. 'thanksgiving-2026'
       },
       milestones: {},   // id -> ISO date earned
     };
@@ -439,6 +440,7 @@
       { id: 'aurora', name: 'Aurora', price: 250 },
       { id: 'psychedelic', name: 'Psychedelic', price: 400, desc: 'Colors that never sit still' },
       { id: 'halloween', name: 'Halloween', price: 200, season: 'halloween', desc: 'Orange, purple and black' },
+      { id: 'harvest', name: 'Harvest', price: 200, season: 'thanksgiving', desc: 'Pumpkin, cranberry and gold' },
     ],
     board: [
       { id: 'default', name: 'Default', price: 0, tone: 'auto' },
@@ -455,6 +457,9 @@
       { id: 'pumpkin', name: 'Pumpkin', price: 150, tone: 'mid', season: 'halloween', desc: 'Pumpkin orange' },
       { id: 'witch', name: 'Witch', price: 150, tone: 'dark', season: 'halloween', desc: 'Deep witchy purple' },
       { id: 'haunted', name: 'Haunted', price: 150, tone: 'dark', season: 'halloween', desc: 'Pitch black' },
+      { id: 'cranberry', name: 'Cranberry', price: 150, tone: 'dark', season: 'thanksgiving', desc: 'Deep cranberry red' },
+      { id: 'hayloft', name: 'Hayloft', price: 150, tone: 'light', season: 'thanksgiving', desc: 'Warm golden straw' },
+      { id: 'pecan', name: 'Pecan', price: 150, tone: 'mid', season: 'thanksgiving', desc: 'Toasty pecan brown' },
     ],
     trail: [
       { id: 'classic', name: 'Classic', price: 0, desc: 'A soft streak' },
@@ -469,12 +474,19 @@
       { id: 'bats', name: 'Bats', price: 200, season: 'halloween', desc: 'A flutter of bats' },
       { id: 'ghosts', name: 'Ghosts', price: 200, season: 'halloween', desc: 'Little ghosts float up' },
       { id: 'candy', name: 'Candy', price: 200, season: 'halloween', desc: 'A trail of sweets' },
+      { id: 'leaves', name: 'Leaves', price: 200, season: 'thanksgiving', desc: 'Autumn leaves drift down' },
+      { id: 'feathers', name: 'Feathers', price: 200, season: 'thanksgiving', desc: 'Turkey feathers float away' },
+      { id: 'acorns', name: 'Acorns', price: 200, season: 'thanksgiving', desc: 'Acorns tumble down' },
+      { id: 'pie', name: 'Pie', price: 200, season: 'thanksgiving', desc: 'Little pumpkin pies' },
     ],
   };
   const STYLE_KINDS = [['arrows', 'Arrow colors'], ['board', 'Board'], ['trail', 'Flight trail']];
   /* HOLIDAYS — seasonal Shop items are only for sale during their month
      (local date). Anything bought stays owned and usable all year. */
-  const SEASONS = { halloween: { name: 'Halloween', month: 9, until: 'Oct 31', emoji: '🎃' } };
+  const SEASONS = {
+    halloween: { name: 'Halloween', month: 9, until: 'Oct 31', emoji: '🎃' },
+    thanksgiving: { name: 'Thanksgiving', month: 10, until: 'Nov 30', emoji: '🦃' },
+  };
   const seasonNow = () => { const m = new Date().getMonth(); return Object.keys(SEASONS).find((k) => SEASONS[k].month === m) || null; };
   const styleItem = (kind, id) => STYLE[kind].find((it) => it.id === id) || STYLE[kind][0];
   /** Put the equipped (or given) arrow theme and board on an SVG board. */
@@ -585,6 +597,10 @@
     bats:     { len: 2.2, opacity: 0.5, color: '#8a55d6', specks: 'icon', icon: 'bat', every: 65 },
     ghosts:   { len: 2.2, opacity: 0.45, color: '#c9c7e8', specks: 'icon', icon: 'ghost', every: 85 },
     candy:    { len: 2.2, opacity: 0.55, color: '#ff5fa2', specks: 'icon', icon: 'candy', every: 60 },
+    leaves:   { len: 2.2, opacity: 0.5, color: '#e8590c', specks: 'icon', icon: 'leaf', every: 60 },
+    feathers: { len: 2.2, opacity: 0.5, color: '#a0612c', specks: 'icon', icon: 'feather', every: 75 },
+    acorns:   { len: 2.2, opacity: 0.5, color: '#b5651d', specks: 'icon', icon: 'acorn', every: 75 },
+    pie:      { len: 2.2, opacity: 0.55, color: '#e88a2e', specks: 'icon', icon: 'pie', every: 80 },
   };
   /* Little trail pictures, drawn in a unit box around (0, 0). Used by the
      flat board (SVG), the 3D view (canvas Path2D) and the Shop previews.
@@ -599,11 +615,20 @@
       fill: '#f7f5ff', stroke: '#6b6b84', rise: 0.6, spin: 50, tilt: 40, evenodd: true },
     candy: { d: 'M-0.17 0a0.17 0.17 0 1 0 0.34 0a0.17 0.17 0 1 0 -0.34 0ZM-0.15 -0.06L-0.42 -0.2L-0.42 0.2L-0.15 0.06ZM0.15 -0.06L0.42 -0.2L0.42 0.2L0.15 0.06Z',
       fill: null, stroke: 'rgba(0,0,0,0.35)', rise: 0.2, spin: 300, tilt: 180 },
+    // Thanksgiving. A negative rise makes it fall instead of float up.
+    leaf: { d: 'M0 -0.48L0.09 -0.27L0.22 -0.34L0.2 -0.14L0.44 -0.16L0.33 0.02L0.42 0.1L0.2 0.15L0.18 0.27L0.04 0.2L0.03 0.46L-0.03 0.46L-0.04 0.2L-0.18 0.27L-0.2 0.15L-0.42 0.1L-0.33 0.02L-0.44 -0.16L-0.2 -0.14L-0.22 -0.34L-0.09 -0.27Z',
+      fill: null, fills: ['#d9480f', '#f08c00', '#c92a2a', '#fab005', '#e8590c'], stroke: 'rgba(70,25,0,0.55)', rise: -0.45, spin: 220, tilt: 180 },
+    feather: { d: 'M0 -0.48C0.21 -0.3 0.23 0.04 0.07 0.28L0.03 0.48L-0.03 0.48L-0.07 0.28C-0.23 0.04 -0.21 -0.3 0 -0.48ZM-0.015 -0.3L0.015 -0.3L0.02 0.3L-0.02 0.3Z',
+      fill: null, fills: ['#8b5a2b', '#c0712f', '#5c3a1e', '#d9a066'], stroke: '#3b2410', rise: -0.25, spin: 90, tilt: 70, evenodd: true },
+    acorn: { d: 'M-0.32 -0.08C-0.32 -0.3 0.32 -0.3 0.32 -0.08ZM-0.03 -0.26L-0.03 -0.42L0.05 -0.42L0.04 -0.26ZM-0.26 -0.08L0.26 -0.08C0.26 0.2 0.1 0.38 0 0.44C-0.1 0.38 -0.26 0.2 -0.26 -0.08Z',
+      fill: '#b5651d', stroke: '#4a2a0c', rise: -0.4, spin: 160, tilt: 40 },
+    pie: { d: 'M0 0L0.42 0A0.42 0.42 0 1 1 0.297 -0.297ZM0.1 -0.12a0.05 0.05 0 1 0 0.1 0a0.05 0.05 0 1 0 -0.1 0Z',
+      fill: '#e07a2e', stroke: '#8a4a12', rise: 0.25, spin: 120, tilt: 60, evenodd: true },
   };
   /* Random look for each speck: a starting tilt (up to ±tilt degrees) and a
      spin that turns either way, between half and the full `spin` amount. */
   const iconTurn = (ic) => ({ rot0: (Math.random() * 2 - 1) * ic.tilt, spin: (Math.random() < 0.5 ? -1 : 1) * ic.spin * (0.5 + Math.random() * 0.5) });
-  const iconFill = (ic) => ic.fill || CANDY_COLORS[Math.floor(Math.random() * CANDY_COLORS.length)];
+  const iconFill = (ic) => { const list = ic.fills || CANDY_COLORS; return ic.fill || list[Math.floor(Math.random() * list.length)]; };
   const iconPath2D = {};
   let heartP2D = null;
   const HEART_P2D = () => heartP2D || (heartP2D = new Path2D('M0 0.35C-0.5 0 -0.55 -0.35 -0.3 -0.45C-0.12 -0.52 0 -0.38 0 -0.28C0 -0.38 0.12 -0.52 0.3 -0.45C0.55 -0.35 0.5 0 0 0.35Z'));
@@ -3013,10 +3038,37 @@
     setTimeout(() => $('#gift-ok').focus(), 50);
     ov._ms = ms;
   }
+  /* NEW IN THE SHOP: a one-time pop-up when a holiday collection goes on
+     sale (once per holiday per year), shown after the daily coins. */
+  function showShopNews() {
+    const season = seasonNow();
+    if (!season || !Save.ok || currentScreen !== 'home' || !$('#gift-overlay').hidden || !$('#news-overlay').hidden) return;
+    const pr = Save.data.progress, key = `${season}-${new Date().getFullYear()}`;
+    if (pr.seenSeasons.includes(key)) return;
+    pr.seenSeasons.push(key); Save.write();
+    const S = SEASONS[season];
+    const count = (kind) => STYLE[kind].filter((it) => it.season === season).length;
+    const parts = [[count('arrows'), 'arrow color', 'arrow colors'], [count('board'), 'board', 'boards'], [count('trail'), 'flight trail', 'flight trails']]
+      .filter(([n]) => n).map(([n, one, many]) => `${n} ${n === 1 ? one : many}`);
+    const list = parts.length > 1 ? parts.slice(0, -1).join(', ') + ' and ' + parts.at(-1) : parts[0];
+    $('#news-emoji').textContent = S.emoji;
+    $('#news-title').textContent = `${S.name} is here!`;
+    $('#news-text').textContent = `New ${S.name} looks: ${list}. Only in the Shop until ${S.until}.`;
+    $('#news-overlay').hidden = false;
+    Sound.play('daily');
+    setTimeout(() => $('#news-shop').focus(), 50);
+  }
+  function closeShopNews(go) {
+    const ov = $('#news-overlay');
+    if (ov.hidden) return;
+    ov.hidden = true;
+    if (go) { Sound.play('tap'); showScreen('style'); }
+  }
   function closeDailyGift() {
     const ov = $('#gift-overlay');
     if (ov.hidden) return;
     ov.hidden = true;
+    setTimeout(showShopNews, 400);
     renderPlayer();
     const pill = $('#home-player .coin-pill');
     pill.classList.remove('is-bump'); void pill.offsetWidth; pill.classList.add('is-bump');
@@ -3038,7 +3090,7 @@
   renderers.home = function () {
     HeroStream.start();
     renderPlayer();
-    setTimeout(() => { if (currentScreen === 'home') showDailyGift(); }, 450);
+    setTimeout(() => { if (currentScreen === 'home') { showDailyGift(); showShopNews(); } }, 450);
     const achN = MILESTONES.filter((m) => Save.data.milestones[m.id]).length;
     $('#home-ach-count').textContent = `${achN} / ${MILESTONES.length}`;
     const act = Save.data.active;
@@ -3145,7 +3197,7 @@
     if (tr.specks === 'icon') {
       const ic = ICONS[tr.icon];
       [[0.45, 0.5, 0.62, -12], [1.3, 0.38, 0.54, 10], [2.15, 0.55, 0.6, -6]].forEach(([x, yy, k, r], i) => {
-        const f = ic.fill || CANDY_COLORS[i % CANDY_COLORS.length];
+        const f = ic.fill || (ic.fills || CANDY_COLORS)[i % (ic.fills || CANDY_COLORS).length];
         fx += `<path transform="translate(${x} ${yy}) rotate(${r}) scale(${k})" d="${ic.d}" fill="${f}" fill-rule="${ic.evenodd ? 'evenodd' : 'nonzero'}" stroke="${ic.stroke}" stroke-width="0.06" stroke-linejoin="round"/>`;
       });
     }
@@ -4534,6 +4586,9 @@
     showScreen('home');
   }));
   $('#gift-ok').addEventListener('click', closeDailyGift);
+  $('#news-shop').addEventListener('click', () => closeShopNews(true));
+  $('#news-later').addEventListener('click', () => closeShopNews(false));
+  $('#news-overlay').addEventListener('click', (e) => { if (e.target.id === 'news-overlay') closeShopNews(false); });
   $('#gift-overlay').addEventListener('click', (e) => { if (e.target.id === 'gift-overlay') closeDailyGift(); });
   // A new day while the app sat open: the gift pops up when you come back to it.
   document.addEventListener('visibilitychange', () => { if (!document.hidden && currentScreen === 'home') showDailyGift(); });
@@ -4554,6 +4609,7 @@
     if (e.target.matches('input, select, textarea')) return;
     if (!$('#quick-overlay').hidden) { if (e.key === 'Escape') Quick.close(); return; }
     if (!$('#confirm-overlay').hidden) { if (e.key === 'Escape') closeConfirm(false); return; }
+    if (!$('#news-overlay').hidden) { if (e.key === 'Escape') closeShopNews(false); return; }
     if (e.key === 'Escape') {
       if (currentScreen === 'game') {
         if (!$('#debug-panel').hidden) { $('#debug-panel').hidden = true; return; }
