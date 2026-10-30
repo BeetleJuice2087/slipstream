@@ -2711,6 +2711,13 @@
     for (const k in lv) if (lv[k].completed && !lv[k].stars) lv[k].stars = lv[k].perfect ? 3 : 1;
     const hist = Save.data.daily.history;
     for (const k in hist) if (hist[k].completed && !hist[k].stars) hist[k].stars = hist[k].perfect ? 3 : 1;
+    // Zen stars started being counted later: older clears count 3 if perfect, else 1.
+    const z = Save.data.zen;
+    if (z.stars === undefined) {
+      const all = Object.values(z.boards).reduce((a, b) => a + b, 0), all3 = Object.values(z.boards3d || {}).reduce((a, b) => a + b, 0);
+      z.stars = z.perfect * 3 + Math.max(0, all - z.perfect);
+      z.stars3d = (z.perfect3d || 0) * 3 + Math.max(0, all3 - (z.perfect3d || 0));
+    }
     // Past dailies can be bought back to this day. Older saves: the first daily in the history, else today.
     if (!Save.data.startedOn) Save.data.startedOn = Object.keys(hist).sort()[0] || dateKey();
   }
@@ -2956,6 +2963,8 @@
       z.boards[d] = (z.boards[d] || 0) + 1;
       if (perfect) z.perfect++;
       if (isCubeKey(sess.key)) { z.boards3d[d] = (z.boards3d[d] || 0) + 1; if (perfect) z.perfect3d++; }
+      z.stars = (z.stars || 0) + res.stars;
+      if (isCubeKey(sess.key)) z.stars3d = (z.stars3d || 0) + res.stars;
       z.session.count = (z.session.count || 0) + 1;
       z.longestSession = Math.max(z.longestSession || 0, z.session.count);
       res.sessionCount = z.session.count;
@@ -3722,14 +3731,18 @@
     const b2 = (d) => Math.max(0, (z.boards[d] || 0) - b3(d));
     const zt2 = E.DIFFICULTY_ORDER.reduce((a, d) => a + b2(d), 0);
     const zt3 = E.DIFFICULTY_ORDER.reduce((a, d) => a + b3(d), 0);
+    // Stars earned, with the average per board (3 is the most a board gives).
+    const zenStars = (n, boards) => `★ ${fmtNum(n)}` + (boards ? ` · ${(n / boards).toFixed(1)} avg` : '');
     body.append(section('Zen 2D Boards', h('div', { class: 'stat-rows' },
       row('2D boards completed', fmtNum(zt2)),
+      row('2D stars earned', zenStars(Math.max(0, (z.stars || 0) - (z.stars3d || 0)), zt2)),
       ...E.DIFFICULTY_ORDER.map((d) => row(`${diffLabel(d)} boards`, fmtNum(b2(d)))),
       row('2D perfect clears', fmtNum(Math.max(0, z.perfect - (z.perfect3d || 0)))),
       row('Longest Zen session', `${z.longestSession || 0} board${z.longestSession === 1 ? '' : 's'}`),
       row('2D arrows escaped', fmtNum(Math.max(0, z.arrows - (z.arrows3d || 0)))))));
     body.append(section('Zen 3D Shapes', h('div', { class: 'stat-rows' },
       row('3D shapes completed', fmtNum(zt3)),
+      row('3D stars earned', zenStars(z.stars3d || 0, zt3)),
       ...E.DIFFICULTY_ORDER.map((d) => row(`${diffLabel(d)} shapes`, fmtNum(b3(d)))),
       row('3D perfect clears', fmtNum(z.perfect3d || 0)),
       row('3D arrows escaped', fmtNum(z.arrows3d || 0)))));
