@@ -1072,8 +1072,8 @@ button.cal-day.is-perfect { background: color-mix(in srgb, var(--gold) 22%, tran
   --l0: #ff0289; --l1: #53005f; --l2: #8a79ff; --l3: #99032c; --l4: #1600b1; --l5: #b66b5c; --l6: #635594; --l7: #b300c6; }
 .skin.th-aurora { --d0: #49f09e; --d1: #03caaf; --d2: #58b4f5; --d3: #a594ff; --d4: #cf5cf5; --d5: #c8ffe9; --d6: #7fe6ff; --d7: #ff7ad9;
   --l0: #059a5e; --l1: #06775d; --l2: #076892; --l3: #514aab; --l4: #64257c; --l5: #1e3a7a; --l6: #018eb4; --l7: #b0258f; }
-.skin.th-harvest { --d0: #ff8c1a; --d1: #ffd166; --d2: #ff4d6d; --d3: #a7c957; --d4: #f4e3c1; --d5: #d9905a; --d6: #c49bff; --d7: #ff9e7a;
-  --l0: #c2410c; --l1: #8f6400; --l2: #a1122e; --l3: #4d6b12; --l4: #5e4434; --l5: #8b4513; --l6: #5b2a86; --l7: #c2185b; }
+.skin.th-harvest { --d0: #e8621f; --d1: #e8a214; --d2: #f2e8d0; --d3: #cc7a33; --d4: #b07a4e; --d5: #f6c55c; --d6: #d9531e; --d7: #dcc29a;
+  --l0: #c8450a; --l1: #b37b08; --l2: #5c3310; --l3: #a35c1a; --l4: #7a4416; --l5: #8f330c; --l6: #6e4a22; --l7: #9a6a10; }
 .skin.th-halloween { --d0: #f78302; --d1: #cc90ff; --d2: #f3edd6; --d3: #7be04a; --d4: #ffc93c; --d5: #fe3854; --d6: #ed43ca; --d7: #b6bfd3;
   --l0: #e34300; --l1: #5224a4; --l2: #1a1a1a; --l3: #218d2b; --l4: #8f6200; --l5: #a40014; --l6: #9e1c89; --l7: #505b73; }
 /* Psychedelic arrows: game.js steps every color slot around the hue wheel

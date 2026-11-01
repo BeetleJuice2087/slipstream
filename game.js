@@ -440,7 +440,7 @@
       { id: 'aurora', name: 'Aurora', price: 250 },
       { id: 'psychedelic', name: 'Psychedelic', price: 400, desc: 'Colors that never sit still' },
       { id: 'halloween', name: 'Halloween', price: 200, season: 'halloween', desc: 'Orange, purple and black' },
-      { id: 'harvest', name: 'Harvest', price: 200, season: 'thanksgiving', desc: 'Pumpkin, cranberry and gold' },
+      { id: 'harvest', name: 'Harvest', price: 200, season: 'thanksgiving', desc: 'Pumpkin, gold, walnut and cream' },
     ],
     board: [
       { id: 'default', name: 'Default', price: 0, tone: 'auto' },
